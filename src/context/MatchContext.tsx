@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface MatchContextType {
   matchId: string | null;
@@ -9,7 +9,18 @@ interface MatchContextType {
 const MatchContext = createContext<MatchContextType | undefined>(undefined);
 
 export function MatchProvider({ children }: { children: ReactNode }) {
-  const [matchId, setMatchId] = useState<string | null>(null);
+  const [matchId, setMatchIdState] = useState<string | null>(() => {
+    return sessionStorage.getItem('current_match_id');
+  });
+
+  const setMatchId = (id: string | null) => {
+    setMatchIdState(id);
+    if (id) {
+      sessionStorage.setItem('current_match_id', id);
+    } else {
+      sessionStorage.removeItem('current_match_id');
+    }
+  };
 
   const generateMatchId = () => {
     const id = Math.floor(100000 + Math.random() * 900000).toString();

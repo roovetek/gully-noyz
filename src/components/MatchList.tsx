@@ -178,7 +178,9 @@ export function MatchList({ onBack }: MatchListProps) {
         .eq('match_id', pendingMatch.id)
         .maybeSingle();
 
-      if (!match) return;
+      if (!match) {
+        return { success: false, error: 'Match not found' };
+      }
 
       const secretHash = btoa(secret);
       if (match.secret_hash === secretHash) {
@@ -188,15 +190,24 @@ export function MatchList({ onBack }: MatchListProps) {
         if (pendingAction === 'join') {
           setMatchId(pendingMatch.id);
         } else if (pendingAction === 'rename') {
-          setEditingMatch(pendingMatch.id);
-          setNewName(pendingMatch.name);
+          const matchToEdit = matches.find(m => m.match_id === pendingMatch.id);
+          if (matchToEdit) {
+            setEditingMatch(pendingMatch.id);
+            setNewName(matchToEdit.name);
+            setNewTotalOvers(matchToEdit.total_overs);
+            setNewBallsPerOver(matchToEdit.balls_per_over);
+          }
         }
 
         setPendingMatch(null);
         setPendingAction(null);
+        return { success: true };
+      } else {
+        return { success: false, error: 'Incorrect secret' };
       }
     } catch (err) {
       console.error('Error verifying secret:', err);
+      return { success: false, error: 'Failed to verify secret' };
     }
   };
 

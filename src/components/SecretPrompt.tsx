@@ -4,21 +4,30 @@ import { Lock, X } from 'lucide-react';
 interface SecretPromptProps {
   matchId: string;
   matchName: string;
-  onVerify: (secret: string) => void;
+  onVerify: (secret: string) => Promise<{ success: boolean; error?: string } | void>;
   onCancel: () => void;
 }
 
 export function SecretPrompt({ matchId, matchName, onVerify, onCancel }: SecretPromptProps) {
   const [secret, setSecret] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!secret.trim()) {
       setError('Please enter the match secret');
       return;
     }
-    onVerify(secret.trim());
+
+    setLoading(true);
+    setError('');
+    const result = await onVerify(secret.trim());
+    setLoading(false);
+
+    if (result && !result.success) {
+      setError(result.error || 'Incorrect secret');
+    }
   };
 
   return (
@@ -69,14 +78,16 @@ export function SecretPrompt({ matchId, matchName, onVerify, onCancel }: SecretP
               type="button"
               onClick={onCancel}
               className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors"
+              disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-black py-3 rounded-lg font-bold transition-colors"
+              className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-black py-3 rounded-lg font-bold transition-colors disabled:opacity-50"
+              disabled={loading}
             >
-              Access Match
+              {loading ? 'Verifying...' : 'Access Match'}
             </button>
           </div>
         </form>

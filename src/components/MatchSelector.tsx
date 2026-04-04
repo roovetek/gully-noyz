@@ -84,12 +84,13 @@ export function MatchSelector() {
         setMatchId(pendingMatch.id);
         setShowSecretPrompt(false);
         setPendingMatch(null);
+        return { success: true };
       } else {
-        setError('Incorrect secret');
+        return { success: false, error: 'Incorrect secret' };
       }
     } catch (err) {
       console.error('Error verifying secret:', err);
-      setError('Failed to verify secret');
+      return { success: false, error: 'Failed to verify secret' };
     }
   };
 
