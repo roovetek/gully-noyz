@@ -19,7 +19,7 @@ export const OUTCOMES = {
   FOUR: '4',
   SIX: '6',
   WICKET: 'wicket',
-  OUT: 'out',
+  OTHER: 'other',
 } as const;
 
 export const OUT_TYPES = {

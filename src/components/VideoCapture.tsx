@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Circle, Square, ChevronUp, Pause, Play, X } from 'lucide-react';
+import { Circle, Square, ChevronUp, Pause, Play } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { supabase } from '../lib/supabase';
 
@@ -180,17 +180,6 @@ export function VideoCapture() {
     }
   };
 
-  const handleCancelRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      setIsPaused(false);
-      setRecordingTime(0);
-      chunksRef.current = [];
-    }
-  };
-
   const startRecording = async () => {
     if (!videoRef.current?.srcObject) {
       await initCamera();
@@ -261,7 +250,7 @@ export function VideoCapture() {
 
   const handleOutcomeSelect = (outcome: string) => {
     setSelectedOutcome(outcome);
-    if (outcome !== 'out') {
+    if (outcome !== 'wicket') {
       setSelectedOutType(null);
     }
   };
@@ -269,7 +258,7 @@ export function VideoCapture() {
   const uploadClip = async () => {
     if (!recordingData || !selectedOutcome || !matchId) return;
 
-    if (selectedOutcome === 'out' && !selectedOutType) {
+    if (selectedOutcome === 'wicket' && !selectedOutType) {
       setError('Please select the type of dismissal');
       return;
     }
@@ -297,7 +286,7 @@ export function VideoCapture() {
         .from('clips')
         .getPublicUrl(fileName);
 
-      const outcomeValue = selectedOutcome === 'out' ? selectedOutType!.toLowerCase() : selectedOutcome.toLowerCase();
+      const outcomeValue = selectedOutcome === 'wicket' && selectedOutType ? selectedOutType.toLowerCase() : selectedOutcome.toLowerCase();
 
       const { error: dbError } = await supabase.from('clips').insert({
         match_id: matchId,
@@ -358,11 +347,6 @@ export function VideoCapture() {
     }
   };
 
-  const handleCompleteOver = () => {
-    setOverNumber(overNumber + 1);
-    setBallNumber(1);
-  };
-
   const handleCancel = () => {
     setShowDrawer(false);
     setSelectedOutcome(null);
@@ -420,15 +404,6 @@ export function VideoCapture() {
             <span className="text-lg font-bold text-green-400">{ballNumber}</span>
           </div>
 
-          {!isRecording && !showDrawer && !inningsComplete && (
-            <button
-              onClick={handleCompleteOver}
-              className="bg-yellow-400/90 hover:bg-yellow-500 backdrop-blur px-3 py-2 rounded-lg text-black font-bold text-sm transition-colors"
-            >
-              Complete Over
-            </button>
-          )}
-
           {isRecording && (
             <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
               <span className="text-sm font-semibold">
@@ -442,24 +417,16 @@ export function VideoCapture() {
       <div className="absolute bottom-0 left-0 right-0 pb-20 px-4 z-10">
         <div className="flex justify-center items-center gap-4">
           {isRecording && (
-            <>
-              <button
-                onClick={handleCancelRecording}
-                className="w-16 h-16 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-all shadow-lg"
-              >
-                <X size={28} className="text-white" />
-              </button>
-              <button
-                onClick={handlePauseResume}
-                className="w-16 h-16 rounded-full bg-yellow-400 hover:bg-yellow-500 flex items-center justify-center transition-all shadow-lg"
-              >
-                {isPaused ? (
-                  <Play size={28} className="text-black" />
-                ) : (
-                  <Pause size={28} className="text-black" />
-                )}
-              </button>
-            </>
+            <button
+              onClick={handlePauseResume}
+              className="w-16 h-16 rounded-full bg-yellow-400 hover:bg-yellow-500 flex items-center justify-center transition-all shadow-lg"
+            >
+              {isPaused ? (
+                <Play size={28} className="text-black" />
+              ) : (
+                <Pause size={28} className="text-black" />
+              )}
+            </button>
           )}
           <button
             onClick={handleRecordToggle}
@@ -523,22 +490,22 @@ export function VideoCapture() {
                     {outcome === 'dot' ? 'Dot' : outcome}
                   </button>
                 ))}
-                {['4', '6', 'wicket', 'out'].map((outcome) => (
+                {['4', '6', 'wicket', 'other'].map((outcome) => (
                   <button
                     key={outcome}
                     onClick={() => handleOutcomeSelect(outcome)}
                     className={`py-3 rounded-lg font-bold transition-colors ${
                       selectedOutcome === outcome
-                        ? outcome === 'wicket' || outcome === 'out' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-black'
+                        ? outcome === 'wicket' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-black'
                         : 'bg-gray-800 hover:bg-gray-700 text-white'
                     }`}
                   >
-                    {outcome === 'wicket' ? 'Wicket' : outcome === 'out' ? 'Out' : outcome}
+                    {outcome === 'wicket' ? 'Wicket' : outcome === 'other' ? 'Other' : outcome}
                   </button>
                 ))}
               </div>
 
-              {selectedOutcome === 'out' && (
+              {selectedOutcome === 'wicket' && (
                 <div>
                   <label className="text-gray-400 text-xs mb-2 block">Type of Dismissal</label>
                   <select
