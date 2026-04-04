@@ -3,6 +3,7 @@ import { ArrowLeft, Users, Video, CreditCard as Edit2, Lock, Check, X } from 'lu
 import { supabase } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { SecretPrompt } from './SecretPrompt';
+import { getTestDataFilter } from '../lib/testDataFilter';
 
 interface MatchInfo {
   match_id: string;
@@ -67,10 +68,17 @@ export function MatchList({ onBack }: MatchListProps) {
   const fetchMatches = async () => {
     setLoading(true);
 
-    const { data: matchesData, error: matchesError } = await supabase
+    const testDataFilter = getTestDataFilter();
+    let matchesQuery = supabase
       .from('matches')
       .select('match_id, name, is_public, total_overs, balls_per_over, created_at')
       .order('created_at', { ascending: false });
+
+    if (testDataFilter !== undefined) {
+      matchesQuery = matchesQuery.eq('is_test_data', testDataFilter);
+    }
+
+    const { data: matchesData, error: matchesError } = await matchesQuery;
 
     if (matchesError) {
       console.error('Error fetching matches:', matchesError);
@@ -78,9 +86,15 @@ export function MatchList({ onBack }: MatchListProps) {
       return;
     }
 
-    const { data: clipsData, error: clipsError } = await supabase
+    let clipsQuery = supabase
       .from('clips')
       .select('*');
+
+    if (testDataFilter !== undefined) {
+      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+    }
+
+    const { data: clipsData, error: clipsError } = await clipsQuery;
 
     if (clipsError) {
       console.error('Error fetching clips:', clipsError);

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Home, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { supabase, Clip } from '../lib/supabase';
+import { getTestDataFilter } from '../lib/testDataFilter';
 
 interface InningsSummary {
   inningsNumber: number;
@@ -49,10 +50,17 @@ export function MatchStats() {
       });
     }
 
-    const { data: clips } = await supabase
+    const testDataFilter = getTestDataFilter();
+    let clipsQuery = supabase
       .from('clips')
       .select('*')
-      .eq('match_id', matchId)
+      .eq('match_id', matchId);
+
+    if (testDataFilter !== undefined) {
+      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+    }
+
+    const { data: clips } = await clipsQuery
       .order('innings_number', { ascending: true })
       .order('over_number', { ascending: true })
       .order('ball_number', { ascending: true });

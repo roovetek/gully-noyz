@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Circle, Square, ChevronUp, Pause, Play } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { supabase } from '../lib/supabase';
+import { getTestDataFilter } from '../lib/testDataFilter';
 
 interface RecordingData {
   blob: Blob;
@@ -55,11 +56,18 @@ export function VideoCapture() {
     };
 
     const fetchMatchStats = async () => {
-      const { data: clips } = await supabase
+      const testDataFilter = getTestDataFilter();
+      let clipsQuery = supabase
         .from('clips')
         .select('outcome, over_number, ball_number, innings_number')
         .eq('match_id', matchId)
-        .eq('innings_number', currentInnings)
+        .eq('innings_number', currentInnings);
+
+      if (testDataFilter !== undefined) {
+        clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+      }
+
+      const { data: clips } = await clipsQuery
         .order('over_number', { ascending: false })
         .order('ball_number', { ascending: false });
 
@@ -103,12 +111,19 @@ export function VideoCapture() {
     };
 
     const fetchUsedBalls = async () => {
-      const { data } = await supabase
+      const testDataFilter = getTestDataFilter();
+      let clipsQuery = supabase
         .from('clips')
         .select('ball_number')
         .eq('match_id', matchId)
         .eq('innings_number', currentInnings)
         .eq('over_number', overNumber);
+
+      if (testDataFilter !== undefined) {
+        clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+      }
+
+      const { data } = await clipsQuery;
 
       if (data) {
         setUsedBalls(new Set(data.map(clip => clip.ball_number)));

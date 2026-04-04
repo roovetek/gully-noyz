@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Play } from 'lucide-react';
 import { supabase, Clip } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
+import { getTestDataFilter } from '../lib/testDataFilter';
 
 export function MatchTimeline() {
   const { matchId } = useMatch();
@@ -71,10 +72,17 @@ export function MatchTimeline() {
     if (!matchId) return;
 
     setLoading(true);
-    const { data, error } = await supabase
+    const testDataFilter = getTestDataFilter();
+    let clipsQuery = supabase
       .from('clips')
       .select('*')
-      .eq('match_id', matchId)
+      .eq('match_id', matchId);
+
+    if (testDataFilter !== undefined) {
+      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+    }
+
+    const { data, error } = await clipsQuery
       .order('innings_number', { ascending: false })
       .order('over_number', { ascending: false })
       .order('ball_number', { ascending: false });
