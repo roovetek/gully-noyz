@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 
 interface CreateMatchModalProps {
   onClose: () => void;
-  onMatchCreated: (matchId: string, matchSecret?: string) => void;
+  onMatchCreated: (matchId: string, matchSecret?: string, name?: string) => void;
 }
 
 export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalProps) {
@@ -65,7 +65,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         throw insertError;
       }
 
-      onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined);
+      onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
     } catch (err: any) {
       console.error('Error creating match:', err);
       const errorMessage = err?.message || 'Failed to create match. Please try again.';

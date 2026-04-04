@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Circle, Square, ChevronUp } from 'lucide-react';
+import { Circle, Square, ChevronUp, Pause, Play, X } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { supabase } from '../lib/supabase';
 
@@ -18,10 +18,12 @@ export function VideoCapture() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [overNumber, setOverNumber] = useState(1);
   const [ballNumber, setBallNumber] = useState(1);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
+  const [selectedOutType, setSelectedOutType] = useState<string | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [recordingData, setRecordingData] = useState<RecordingData | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -147,6 +149,40 @@ export function VideoCapture() {
     }
   };
 
+  const handlePauseResume = () => {
+    if (!mediaRecorderRef.current) return;
+
+    if (isPaused) {
+      mediaRecorderRef.current.resume();
+      setIsPaused(false);
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => {
+          const newTime = prev + 1;
+          if (newTime >= 15) {
+            stopRecording();
+            return 15;
+          }
+          return newTime;
+        });
+      }, 1000);
+    } else {
+      mediaRecorderRef.current.pause();
+      setIsPaused(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const handleCancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setIsPaused(false);
+      setRecordingTime(0);
+      chunksRef.current = [];
+    }
+  };
+
   const startRecording = async () => {
     if (!videoRef.current?.srcObject) {
       await initCamera();
@@ -217,10 +253,18 @@ export function VideoCapture() {
 
   const handleOutcomeSelect = (outcome: string) => {
     setSelectedOutcome(outcome);
+    if (outcome !== 'out') {
+      setSelectedOutType(null);
+    }
   };
 
   const uploadClip = async () => {
     if (!recordingData || !selectedOutcome || !matchId) return;
+
+    if (selectedOutcome === 'out' && !selectedOutType) {
+      setError('Please select the type of dismissal');
+      return;
+    }
 
     if (usedBalls.has(confirmBallNumber)) {
       setError(`Ball ${confirmBallNumber} has already been recorded for Over ${overNumber}`);
@@ -245,11 +289,13 @@ export function VideoCapture() {
         .from('clips')
         .getPublicUrl(fileName);
 
+      const outcomeValue = selectedOutcome === 'out' ? selectedOutType!.toLowerCase() : selectedOutcome.toLowerCase();
+
       const { error: dbError } = await supabase.from('clips').insert({
         match_id: matchId,
         over_number: overNumber,
         ball_number: confirmBallNumber,
-        outcome: selectedOutcome.toLowerCase(),
+        outcome: outcomeValue,
         video_url: urlData.publicUrl,
         duration: recordingData.duration,
       });
@@ -281,6 +327,7 @@ export function VideoCapture() {
 
       setShowDrawer(false);
       setSelectedOutcome(null);
+      setSelectedOutType(null);
       setRecordingData(null);
       setIsUploading(false);
     } catch (error) {
@@ -297,6 +344,7 @@ export function VideoCapture() {
   const handleCancel = () => {
     setShowDrawer(false);
     setSelectedOutcome(null);
+    setSelectedOutType(null);
     setRecordingData(null);
   };
 
@@ -343,9 +391,9 @@ export function VideoCapture() {
           )}
 
           {isRecording && (
-            <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg animate-pulse">
+            <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
               <span className="text-sm font-semibold">
-                {recordingTime}s / 15s
+                {isPaused ? 'Paused ' : ''}{recordingTime}s / 15s
               </span>
             </div>
           )}
@@ -353,7 +401,27 @@ export function VideoCapture() {
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 pb-20 px-4 z-10">
-        <div className="flex justify-center">
+        <div className="flex justify-center items-center gap-4">
+          {isRecording && (
+            <>
+              <button
+                onClick={handleCancelRecording}
+                className="w-16 h-16 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-all shadow-lg"
+              >
+                <X size={28} className="text-white" />
+              </button>
+              <button
+                onClick={handlePauseResume}
+                className="w-16 h-16 rounded-full bg-yellow-400 hover:bg-yellow-500 flex items-center justify-center transition-all shadow-lg"
+              >
+                {isPaused ? (
+                  <Play size={28} className="text-black" />
+                ) : (
+                  <Pause size={28} className="text-black" />
+                )}
+              </button>
+            </>
+          )}
           <button
             onClick={handleRecordToggle}
             disabled={showDrawer}
@@ -402,7 +470,7 @@ export function VideoCapture() {
 
             <div>
               <label className="text-gray-400 text-sm mb-2 block">Outcome</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-2 mb-3">
                 {['dot', '1', '2', '3'].map((outcome) => (
                   <button
                     key={outcome}
@@ -416,20 +484,43 @@ export function VideoCapture() {
                     {outcome === 'dot' ? 'Dot' : outcome}
                   </button>
                 ))}
-                {['4', '6', 'wicket'].map((outcome) => (
+                {['4', '6', 'wicket', 'out'].map((outcome) => (
                   <button
                     key={outcome}
                     onClick={() => handleOutcomeSelect(outcome)}
                     className={`py-3 rounded-lg font-bold transition-colors ${
                       selectedOutcome === outcome
-                        ? outcome === 'wicket' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-black'
+                        ? outcome === 'wicket' || outcome === 'out' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-black'
                         : 'bg-gray-800 hover:bg-gray-700 text-white'
                     }`}
                   >
-                    {outcome === 'wicket' ? 'Wicket' : outcome}
+                    {outcome === 'wicket' ? 'Wicket' : outcome === 'out' ? 'Out' : outcome}
                   </button>
                 ))}
               </div>
+
+              {selectedOutcome === 'out' && (
+                <div>
+                  <label className="text-gray-400 text-xs mb-2 block">Type of Dismissal</label>
+                  <select
+                    value={selectedOutType || ''}
+                    onChange={(e) => setSelectedOutType(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white py-3 px-3 rounded-lg focus:outline-none focus:border-red-400"
+                  >
+                    <option value="">Select dismissal type</option>
+                    <option value="bowled">Bowled</option>
+                    <option value="caught">Caught</option>
+                    <option value="lbw">Leg Before Wicket (LBW)</option>
+                    <option value="runout">Run Out</option>
+                    <option value="stumped">Stumped</option>
+                    <option value="hitwicket">Hit Wicket</option>
+                    <option value="hitballtwice">Hit the Ball Twice</option>
+                    <option value="obstructing">Obstructing the Field</option>
+                    <option value="timedout">Timed Out</option>
+                    <option value="handledball">Handled the Ball</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 

@@ -7,7 +7,7 @@ import { SecretPrompt } from './SecretPrompt';
 import { supabase } from '../lib/supabase';
 
 export function MatchSelector() {
-  const { setMatchId } = useMatch();
+  const { setMatchId, setMatchName } = useMatch();
   const [joinId, setJoinId] = useState('');
   const [error, setError] = useState('');
   const [showMatchList, setShowMatchList] = useState(false);
@@ -20,9 +20,12 @@ export function MatchSelector() {
     setError('');
   };
 
-  const handleMatchCreated = (matchId: string, matchSecret?: string) => {
+  const handleMatchCreated = (matchId: string, matchSecret?: string, name?: string) => {
     setShowCreateModal(false);
     setMatchId(matchId);
+    if (name) {
+      setMatchName(name);
+    }
     if (matchSecret) {
       sessionStorage.setItem(`match_secret_${matchId}`, matchSecret);
     }
@@ -51,11 +54,28 @@ export function MatchSelector() {
       }
 
       if (!match.is_public) {
-        setPendingMatch({ id: match.match_id, name: match.name });
-        setShowSecretPrompt(true);
-      } else {
-        setMatchId(match.match_id);
+        const storedSecret = sessionStorage.getItem(`match_secret_${match.match_id}`);
+        if (!storedSecret) {
+          setPendingMatch({ id: match.match_id, name: match.name });
+          setShowSecretPrompt(true);
+          return;
+        }
+
+        const { data: matchData } = await supabase
+          .from('matches')
+          .select('secret_hash')
+          .eq('match_id', match.match_id)
+          .maybeSingle();
+
+        if (!matchData || matchData.secret_hash !== btoa(storedSecret)) {
+          setPendingMatch({ id: match.match_id, name: match.name });
+          setShowSecretPrompt(true);
+          return;
+        }
       }
+
+      setMatchId(match.match_id);
+      setMatchName(match.name);
     } catch (err) {
       console.error('Error joining match:', err);
       setError('Failed to join match');
@@ -82,6 +102,7 @@ export function MatchSelector() {
       if (match.secret_hash === secretHash) {
         sessionStorage.setItem(`match_secret_${pendingMatch.id}`, secret);
         setMatchId(pendingMatch.id);
+        setMatchName(pendingMatch.name);
         setShowSecretPrompt(false);
         setPendingMatch(null);
         return { success: true };

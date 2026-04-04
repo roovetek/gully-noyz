@@ -19,7 +19,7 @@ interface MatchListProps {
 }
 
 export function MatchList({ onBack }: MatchListProps) {
-  const { setMatchId } = useMatch();
+  const { setMatchId, setMatchName } = useMatch();
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export function MatchList({ onBack }: MatchListProps) {
     setLoading(false);
   };
 
-  const handleJoinMatch = (match: MatchInfo) => {
+  const handleJoinMatch = async (match: MatchInfo) => {
     if (!match.is_public) {
       const storedSecret = sessionStorage.getItem(`match_secret_${match.match_id}`);
       if (!storedSecret) {
@@ -124,8 +124,22 @@ export function MatchList({ onBack }: MatchListProps) {
         setShowSecretPrompt(true);
         return;
       }
+
+      const { data: matchData } = await supabase
+        .from('matches')
+        .select('secret_hash')
+        .eq('match_id', match.match_id)
+        .maybeSingle();
+
+      if (!matchData || matchData.secret_hash !== btoa(storedSecret)) {
+        setPendingMatch({ id: match.match_id, name: match.name });
+        setPendingAction('join');
+        setShowSecretPrompt(true);
+        return;
+      }
     }
     setMatchId(match.match_id);
+    setMatchName(match.name);
   };
 
   const handleRenameClick = (match: MatchInfo, e: React.MouseEvent) => {
@@ -189,6 +203,7 @@ export function MatchList({ onBack }: MatchListProps) {
 
         if (pendingAction === 'join') {
           setMatchId(pendingMatch.id);
+          setMatchName(pendingMatch.name);
         } else if (pendingAction === 'rename') {
           const matchToEdit = matches.find(m => m.match_id === pendingMatch.id);
           if (matchToEdit) {

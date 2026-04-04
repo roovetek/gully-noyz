@@ -2,7 +2,9 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 
 interface MatchContextType {
   matchId: string | null;
+  matchName: string;
   setMatchId: (id: string | null) => void;
+  setMatchName: (name: string) => void;
   generateMatchId: () => string;
 }
 
@@ -13,13 +15,23 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     return sessionStorage.getItem('current_match_id');
   });
 
+  const [matchName, setMatchNameState] = useState<string>(() => {
+    return sessionStorage.getItem('current_match_name') || '';
+  });
+
   const setMatchId = (id: string | null) => {
     setMatchIdState(id);
     if (id) {
       sessionStorage.setItem('current_match_id', id);
     } else {
       sessionStorage.removeItem('current_match_id');
+      sessionStorage.removeItem('current_match_name');
     }
+  };
+
+  const setMatchName = (name: string) => {
+    setMatchNameState(name);
+    sessionStorage.setItem('current_match_name', name);
   };
 
   const generateMatchId = () => {
@@ -28,7 +40,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MatchContext.Provider value={{ matchId, setMatchId, generateMatchId }}>
+    <MatchContext.Provider value={{ matchId, matchName, setMatchId, setMatchName, generateMatchId }}>
       {children}
     </MatchContext.Provider>
   );
