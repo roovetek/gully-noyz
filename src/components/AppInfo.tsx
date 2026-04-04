@@ -1,44 +1,32 @@
-import { Info } from 'lucide-react';
-import { useMatch } from '../context/MatchContext';
 import { useEffect, useState } from 'react';
-import { getEffectiveRules } from '../lib/rulesEngine';
+import { getGlobalRules } from '../lib/rulesEngine';
+import { Info } from 'lucide-react';
 import { MatchRules } from '../lib/types';
 
-export function MatchInfo() {
-  const { matchId, matchName } = useMatch();
+export function GullyRulz() {
   const [rules, setRules] = useState<MatchRules | null>(null);
 
   useEffect(() => {
-    async function fetchMatchRules() {
-      if (matchId) {
-        const effectiveRules = await getEffectiveRules(matchId);
-        setRules(effectiveRules);
-      }
+    async function fetchRules() {
+      const fetchedRules = await getGlobalRules();
+      setRules(fetchedRules);
     }
-    fetchMatchRules();
-  }, [matchId]);
+    fetchRules();
+  }, []);
 
   return (
     <div className="min-h-screen bg-black text-white pb-20 pt-16">
       <div className="p-4 bg-gray-900 border-b border-gray-800">
         <div className="flex items-center gap-3">
-          <Info size={24} className="text-green-400" />
+          <Info size={24} className="text-blue-400" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Match Info</h1>
-            <p className="text-sm text-gray-400">Details and rules for the current match.</p>
+            <h1 className="text-2xl font-bold text-white">GullyRulz</h1>
+            <p className="text-sm text-gray-400">Global rules for this cricket version.</p>
           </div>
         </div>
       </div>
 
       <div className="p-4 space-y-4">
-        <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
-          <div className="text-sm text-gray-400 uppercase tracking-[0.2em] mb-2">Current Match</div>
-          <div className="text-2xl font-bold text-white">{matchName || 'Unnamed Match'}</div>
-          <div className="mt-2 text-sm text-gray-400">
-            Match ID: <span className="font-mono text-yellow-400">{matchId}</span>
-          </div>
-        </div>
-
         {rules ? (
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
@@ -66,7 +54,7 @@ export function MatchInfo() {
             </div>
           </div>
         ) : (
-          <p className="text-gray-400">Loading match rules...</p>
+          <p className="text-gray-400">Loading rules...</p>
         )}
       </div>
     </div>

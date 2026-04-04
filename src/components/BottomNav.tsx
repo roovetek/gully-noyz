@@ -1,11 +1,19 @@
 import { Video, Clock, BarChart3, Info } from 'lucide-react';
 
+type Tab = 'record' | 'timeline' | 'stats' | 'info' | 'gullyRulz';
+
 interface BottomNavProps {
-  activeTab: 'record' | 'timeline' | 'stats' | 'info';
-  onTabChange: (tab: 'record' | 'timeline' | 'stats' | 'info') => void;
+  matchId: string | null;
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
 }
 
-export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+export function BottomNav({ matchId, activeTab, onTabChange }: BottomNavProps) {
+  // Only show tabs if a match is selected
+  if (!matchId) {
+    return null;
+  }
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800">
       <div className="flex">
@@ -55,6 +63,17 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         >
           <Info size={24} />
           <span className="text-xs font-semibold">Info</span>
+        </button>
+
+        <button
+          onClick={() => onTabChange('gullyRulz')}
+          className={`flex-1 py-4 flex flex-col items-center gap-1 transition-colors ${
+            activeTab === 'gullyRulz'
+              ? 'text-yellow-400 bg-gray-800'
+              : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <span className="text-xs font-semibold">Gully Rulz</span>
         </button>
       </div>
     </nav>

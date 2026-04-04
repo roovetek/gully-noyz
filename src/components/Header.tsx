@@ -1,21 +1,32 @@
-import { Home, ShieldCheck } from 'lucide-react';
+import { Home, ShieldCheck, Info } from 'lucide-react';
 
 interface HeaderProps {
   onHome: () => void;
   onOpenAdmin: () => void;
+  onOpenGullyRulz: () => void;
 }
 
-export function Header({ onHome, onOpenAdmin }: HeaderProps) {
+export function Header({ onHome, onOpenAdmin, onOpenGullyRulz }: HeaderProps) {
   return (
     <header className="fixed top-0 left-0 right-0 bg-gray-900 border-b border-gray-800 z-40">
       <div className="flex items-center justify-between px-4 py-3">
-        <button
-          onClick={onHome}
-          className="flex items-center gap-2 text-green-400 hover:text-green-300 transition-colors"
-        >
-          <Home size={20} />
-          <span className="text-sm font-semibold">Home</span>
-        </button>
+        <div className="flex items-center gap-6">
+          <button
+            onClick={onHome}
+            className="flex items-center gap-2 text-green-400 hover:text-green-300 transition-colors"
+          >
+            <Home size={20} />
+            <span className="text-sm font-semibold">Home</span>
+          </button>
+
+          <button
+            onClick={onOpenGullyRulz}
+            className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <Info size={20} />
+            <span className="text-sm font-semibold">GullyRulz</span>
+          </button>
+        </div>
 
         <button
           onClick={onOpenAdmin}
