@@ -1,4 +1,5 @@
 import { Home, ShieldCheck, Info } from 'lucide-react';
+import { SyncStatus } from './SyncStatus';
 
 interface HeaderProps {
   onHome: () => void;
@@ -28,13 +29,16 @@ export function Header({ onHome, onOpenAdmin, onOpenGullyRulz }: HeaderProps) {
           </button>
         </div>
 
-        <button
-          onClick={onOpenAdmin}
-          className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 transition-colors"
-        >
-          <ShieldCheck size={20} />
-          <span className="text-sm font-semibold">Admin</span>
-        </button>
+        <div className="flex items-center gap-4">
+          <SyncStatus />
+          <button
+            onClick={onOpenAdmin}
+            className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 transition-colors"
+          >
+            <ShieldCheck size={20} />
+            <span className="text-sm font-semibold">Admin</span>
+          </button>
+        </div>
       </div>
     </header>
   );

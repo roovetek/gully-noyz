@@ -7,6 +7,23 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+        },
+      },
+    },
+    minify: true,
+    sourcemap: true,
+    assetsDir: 'assets',
+  },
+  server: {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    },
+  },
   test: {
     globals: true,
     environment: 'happy-dom',
