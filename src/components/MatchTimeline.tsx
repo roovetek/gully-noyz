@@ -12,6 +12,7 @@ export function MatchTimeline() {
   const [selectedBall, setSelectedBall] = useState<number | null>(null);
   const [availableOvers, setAvailableOvers] = useState<number[]>([]);
   const [availableBalls, setAvailableBalls] = useState<number[]>([]);
+  const [selectedInnings, setSelectedInnings] = useState<number>(1);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,6 +38,9 @@ export function MatchTimeline() {
               const newClip = payload.new as Clip;
               const updated = [...current, newClip];
               return updated.sort((a, b) => {
+                if (b.innings_number !== a.innings_number) {
+                  return b.innings_number - a.innings_number;
+                }
                 if (b.over_number !== a.over_number) {
                   return b.over_number - a.over_number;
                 }
@@ -71,6 +75,7 @@ export function MatchTimeline() {
       .from('clips')
       .select('*')
       .eq('match_id', matchId)
+      .order('innings_number', { ascending: false })
       .order('over_number', { ascending: false })
       .order('ball_number', { ascending: false });
 
@@ -79,14 +84,15 @@ export function MatchTimeline() {
     } else {
       setClips(data || []);
 
-      const overs = [...new Set(data?.map(clip => clip.over_number) || [])].sort((a, b) => b - a);
+      const filteredData = data?.filter(clip => clip.innings_number === selectedInnings) || [];
+      const overs = [...new Set(filteredData.map(clip => clip.over_number))].sort((a, b) => b - a);
       setAvailableOvers(overs);
 
       if (selectedOver) {
-        const balls = data
-          ?.filter(clip => clip.over_number === selectedOver)
+        const balls = filteredData
+          .filter(clip => clip.over_number === selectedOver)
           .map(clip => clip.ball_number)
-          .sort((a, b) => b - a) || [];
+          .sort((a, b) => b - a);
         setAvailableBalls(balls);
       }
     }
@@ -94,21 +100,25 @@ export function MatchTimeline() {
   };
 
   useEffect(() => {
+    fetchClips();
+  }, [selectedInnings]);
+
+  useEffect(() => {
     if (selectedOver && clips.length > 0) {
       const balls = clips
-        .filter(clip => clip.over_number === selectedOver)
+        .filter(clip => clip.innings_number === selectedInnings && clip.over_number === selectedOver)
         .map(clip => clip.ball_number)
         .sort((a, b) => b - a);
       setAvailableBalls(balls);
     } else {
       setAvailableBalls([]);
     }
-  }, [selectedOver, clips]);
+  }, [selectedOver, clips, selectedInnings]);
 
   const handleNavigate = () => {
     if (selectedOver !== null && selectedBall !== null) {
       const targetClip = clips.find(
-        clip => clip.over_number === selectedOver && clip.ball_number === selectedBall
+        clip => clip.innings_number === selectedInnings && clip.over_number === selectedOver && clip.ball_number === selectedBall
       );
 
       if (targetClip) {
@@ -174,25 +184,27 @@ export function MatchTimeline() {
     );
   }
 
+  const filteredClips = clips.filter(clip => clip.innings_number === selectedInnings);
+
   const getTotalRuns = () => {
-    return clips.reduce((total, clip) => {
+    return filteredClips.reduce((total, clip) => {
       const runs = parseInt(clip.outcome);
       return total + (isNaN(runs) ? 0 : runs);
     }, 0);
   };
 
   const getTotalWickets = () => {
-    return clips.filter(clip => clip.outcome === 'wicket').length;
+    return filteredClips.filter(clip => clip.outcome === 'wicket').length;
   };
 
   const getTotalBalls = () => {
-    return clips.length;
+    return filteredClips.length;
   };
 
   const getTotalOvers = () => {
-    const uniqueOvers = new Set(clips.map(clip => clip.over_number));
+    const uniqueOvers = new Set(filteredClips.map(clip => clip.over_number));
     const completedOvers = uniqueOvers.size;
-    const ballsInCurrentOver = clips.filter(clip =>
+    const ballsInCurrentOver = filteredClips.filter(clip =>
       clip.over_number === Math.max(...Array.from(uniqueOvers))
     ).length;
 
@@ -206,6 +218,29 @@ export function MatchTimeline() {
   return (
     <div className="min-h-screen bg-black text-white pb-20">
       <div className="p-4 mb-4 bg-gray-900 border-b border-gray-800">
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setSelectedInnings(1)}
+            className={`flex-1 py-2 rounded-lg font-bold transition-colors ${
+              selectedInnings === 1
+                ? 'bg-orange-500 text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            Innings 1
+          </button>
+          <button
+            onClick={() => setSelectedInnings(2)}
+            className={`flex-1 py-2 rounded-lg font-bold transition-colors ${
+              selectedInnings === 2
+                ? 'bg-orange-500 text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            Innings 2
+          </button>
+        </div>
+
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="bg-gray-800 rounded-lg p-3 text-center border border-green-400">
             <div className="text-gray-400 text-xs mb-1">Runs</div>
@@ -213,7 +248,7 @@ export function MatchTimeline() {
           </div>
           <div className="bg-gray-800 rounded-lg p-3 text-center border border-blue-400">
             <div className="text-gray-400 text-xs mb-1">Overs</div>
-            <div className="text-blue-400 text-2xl font-bold">{clips.length > 0 ? getTotalOvers() : '0'}</div>
+            <div className="text-blue-400 text-2xl font-bold">{filteredClips.length > 0 ? getTotalOvers() : '0'}</div>
           </div>
           <div className="bg-gray-800 rounded-lg p-3 text-center border border-red-400">
             <div className="text-gray-400 text-xs mb-1">Wickets</div>
@@ -261,66 +296,75 @@ export function MatchTimeline() {
       </div>
 
       <div ref={scrollRef} className="p-4 space-y-3">
-        {clips.map((clip) => (
-          <div
-            id={`clip-${clip.id}`}
-            key={clip.id}
-            className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden transition-all"
-          >
-            <div className="relative">
-              <video
-                id={`video-${clip.id}`}
-                src={clip.video_url}
-                className="w-full max-h-60 bg-black object-contain"
-                controls
-                playsInline
-                preload="metadata"
-                onPlay={() => setPlayingClipId(clip.id)}
-                onPause={() => setPlayingClipId(null)}
-              />
-              {playingClipId !== clip.id && (
-                <button
-                  onClick={() => handlePlayClip(clip.id, clip.video_url)}
-                  className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
-                >
-                  <div className="w-16 h-16 bg-green-500/90 rounded-full flex items-center justify-center">
-                    <Play size={28} className="text-white ml-1" />
-                  </div>
-                </button>
-              )}
-            </div>
-
-            <div className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-gray-800 border border-green-400 rounded px-3 py-1">
-                    <span className="text-sm text-gray-400">Over </span>
-                    <span className="text-white font-bold">{clip.over_number}</span>
-                    <span className="text-gray-400"> - </span>
-                    <span className="text-sm text-gray-400">Ball </span>
-                    <span className="text-white font-bold">{clip.ball_number}</span>
-                  </div>
-
-                  <div
-                    className={`border rounded px-3 py-1 font-bold text-sm ${getOutcomeColor(
-                      clip.outcome
-                    )}`}
-                  >
-                    {clip.outcome}
-                  </div>
-                </div>
-
-                <div className="text-gray-500 text-sm">
-                  {clip.duration}s
-                </div>
-              </div>
-
-              <div className="mt-2 text-gray-500 text-xs">
-                {new Date(clip.created_at).toLocaleTimeString()}
-              </div>
-            </div>
+        {filteredClips.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No clips recorded for Innings {selectedInnings}</p>
           </div>
-        ))}
+        ) : (
+          filteredClips.map((clip) => (
+            <div
+              id={`clip-${clip.id}`}
+              key={clip.id}
+              className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden transition-all"
+            >
+              <div className="relative">
+                <video
+                  id={`video-${clip.id}`}
+                  src={clip.video_url}
+                  className="w-full max-h-60 bg-black object-contain"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  onPlay={() => setPlayingClipId(clip.id)}
+                  onPause={() => setPlayingClipId(null)}
+                />
+                {playingClipId !== clip.id && (
+                  <button
+                    onClick={() => handlePlayClip(clip.id, clip.video_url)}
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
+                  >
+                    <div className="w-16 h-16 bg-green-500/90 rounded-full flex items-center justify-center">
+                      <Play size={28} className="text-white ml-1" />
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-orange-500/20 border border-orange-400 rounded px-2 py-0.5">
+                      <span className="text-xs text-orange-400 font-bold">Innings {clip.innings_number}</span>
+                    </div>
+                    <div className="bg-gray-800 border border-green-400 rounded px-3 py-1">
+                      <span className="text-sm text-gray-400">Over </span>
+                      <span className="text-white font-bold">{clip.over_number}</span>
+                      <span className="text-gray-400"> - </span>
+                      <span className="text-sm text-gray-400">Ball </span>
+                      <span className="text-white font-bold">{clip.ball_number}</span>
+                    </div>
+
+                    <div
+                      className={`border rounded px-3 py-1 font-bold text-sm ${getOutcomeColor(
+                        clip.outcome
+                      )}`}
+                    >
+                      {clip.outcome}
+                    </div>
+                  </div>
+
+                  <div className="text-gray-500 text-sm">
+                    {clip.duration}s
+                  </div>
+                </div>
+
+                <div className="mt-2 text-gray-500 text-xs">
+                  {new Date(clip.created_at).toLocaleTimeString()}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

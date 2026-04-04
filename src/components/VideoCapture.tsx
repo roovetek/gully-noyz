@@ -36,26 +36,30 @@ export function VideoCapture() {
   const [totalWickets, setTotalWickets] = useState(0);
   const [currentOvers, setCurrentOvers] = useState('0');
   const [cameraInitialized, setCameraInitialized] = useState(false);
+  const [currentInnings, setCurrentInnings] = useState(1);
+  const [inningsComplete, setInningsComplete] = useState(false);
 
   useEffect(() => {
     const fetchMatchConfig = async () => {
       const { data: matchData } = await supabase
         .from('matches')
-        .select('balls_per_over, total_overs')
+        .select('balls_per_over, total_overs, current_innings')
         .eq('match_id', matchId)
         .maybeSingle();
 
       if (matchData) {
         setBallsPerOver(matchData.balls_per_over);
         setTotalOvers(matchData.total_overs);
+        setCurrentInnings(matchData.current_innings);
       }
     };
 
     const fetchMatchStats = async () => {
       const { data: clips } = await supabase
         .from('clips')
-        .select('outcome, over_number, ball_number')
+        .select('outcome, over_number, ball_number, innings_number')
         .eq('match_id', matchId)
+        .eq('innings_number', currentInnings)
         .order('over_number', { ascending: false })
         .order('ball_number', { ascending: false });
 
@@ -79,7 +83,9 @@ export function VideoCapture() {
         setCurrentOvers(currentBalls === 0 ? completedOvers.toString() : `${completedOvers}.${currentBalls}`);
 
         const latestClip = clips[0];
-        if (latestClip.ball_number >= ballsPerOver) {
+        if (latestClip.over_number >= totalOvers && latestClip.ball_number >= ballsPerOver) {
+          setInningsComplete(true);
+        } else if (latestClip.ball_number >= ballsPerOver) {
           setOverNumber(latestClip.over_number + 1);
           setBallNumber(1);
         } else {
@@ -92,6 +98,7 @@ export function VideoCapture() {
         setTotalRuns(0);
         setTotalWickets(0);
         setCurrentOvers('0');
+        setInningsComplete(false);
       }
     };
 
@@ -100,6 +107,7 @@ export function VideoCapture() {
         .from('clips')
         .select('ball_number')
         .eq('match_id', matchId)
+        .eq('innings_number', currentInnings)
         .eq('over_number', overNumber);
 
       if (data) {
@@ -112,7 +120,7 @@ export function VideoCapture() {
       fetchMatchStats();
       fetchUsedBalls();
     }
-  }, [matchId, overNumber, ballsPerOver]);
+  }, [matchId, overNumber, ballsPerOver, currentInnings, totalOvers]);
 
   const initCamera = async () => {
     if (cameraInitialized) return;
@@ -293,6 +301,7 @@ export function VideoCapture() {
 
       const { error: dbError } = await supabase.from('clips').insert({
         match_id: matchId,
+        innings_number: currentInnings,
         over_number: overNumber,
         ball_number: confirmBallNumber,
         outcome: outcomeValue,
@@ -302,7 +311,7 @@ export function VideoCapture() {
 
       if (dbError) {
         if (dbError.code === '23505') {
-          setError(`Ball ${confirmBallNumber} has already been recorded for Over ${overNumber}`);
+          setError(`Ball ${confirmBallNumber} has already been recorded for Over ${overNumber} in Innings ${currentInnings}`);
           setIsUploading(false);
           return;
         }
@@ -311,6 +320,7 @@ export function VideoCapture() {
 
       console.log('Clip uploaded successfully', {
         matchId,
+        inningsNumber: currentInnings,
         overNumber,
         ballNumber: confirmBallNumber,
         outcome: selectedOutcome,
@@ -319,8 +329,20 @@ export function VideoCapture() {
 
       const nextBall = confirmBallNumber + 1;
       if (nextBall > ballsPerOver) {
-        setOverNumber(overNumber + 1);
-        setBallNumber(1);
+        const nextOver = overNumber + 1;
+        if (nextOver > totalOvers && currentInnings === 1) {
+          await supabase
+            .from('matches')
+            .update({ current_innings: 2 })
+            .eq('match_id', matchId);
+          setCurrentInnings(2);
+          setOverNumber(1);
+          setBallNumber(1);
+          setInningsComplete(false);
+        } else {
+          setOverNumber(nextOver);
+          setBallNumber(1);
+        }
       } else {
         setBallNumber(nextBall);
       }
@@ -360,6 +382,23 @@ export function VideoCapture() {
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="absolute top-0 left-0 right-0 p-4 text-white z-10 space-y-2">
+        <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 mb-2 text-center border-2 border-orange-400">
+          <span className="text-orange-400 text-lg font-bold">Innings {currentInnings}</span>
+          <span className="text-gray-400 text-sm ml-2">of 2</span>
+        </div>
+
+        {inningsComplete && currentInnings === 1 && (
+          <div className="bg-yellow-400/20 border border-yellow-400 rounded-lg p-3 mb-2 text-center">
+            <p className="text-yellow-400 font-semibold">Innings 1 Complete! Start Innings 2</p>
+          </div>
+        )}
+
+        {inningsComplete && currentInnings === 2 && (
+          <div className="bg-green-400/20 border border-green-400 rounded-lg p-3 mb-2 text-center">
+            <p className="text-green-400 font-semibold">Match Complete!</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-2 mb-2">
           <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-green-400">
             <div className="text-gray-400 text-xs">Runs</div>
@@ -381,7 +420,7 @@ export function VideoCapture() {
             <span className="text-lg font-bold text-green-400">{ballNumber}</span>
           </div>
 
-          {!isRecording && !showDrawer && (
+          {!isRecording && !showDrawer && !inningsComplete && (
             <button
               onClick={handleCompleteOver}
               className="bg-yellow-400/90 hover:bg-yellow-500 backdrop-blur px-3 py-2 rounded-lg text-black font-bold text-sm transition-colors"
@@ -424,12 +463,12 @@ export function VideoCapture() {
           )}
           <button
             onClick={handleRecordToggle}
-            disabled={showDrawer}
+            disabled={showDrawer || inningsComplete}
             className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg ${
               isRecording
                 ? 'bg-red-500 hover:bg-red-600'
                 : 'bg-green-500 hover:bg-green-600'
-            } ${showDrawer ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${showDrawer || inningsComplete ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isRecording ? (
               <Square size={32} className="text-white fill-white" />
@@ -461,7 +500,7 @@ export function VideoCapture() {
           <div className="space-y-4 mb-6">
             <div>
               <div className="bg-gray-800 border border-green-400 rounded-lg p-4 text-center">
-                <div className="text-gray-400 text-sm mb-1">Recording</div>
+                <div className="text-gray-400 text-sm mb-1">Recording - Innings {currentInnings}</div>
                 <div className="text-white text-3xl font-bold">
                   Over {overNumber} - Ball {confirmBallNumber}
                 </div>
