@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { X, Lock, LockKeyhole } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { hashSecret } from '../lib/security';
+import { generateMatchId } from '../lib/match';
+import { validateMatchName, validateMatchSecret, validateOversConfig } from '../lib/validation';
+import { CRICKET_CONSTANTS, ERROR_MESSAGES } from '../lib/constants';
 
 interface CreateMatchModalProps {
   onClose: () => void;
@@ -11,23 +15,27 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
   const [matchName, setMatchName] = useState('');
   const [matchSecret, setMatchSecret] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [totalOvers, setTotalOvers] = useState(20);
-  const [ballsPerOver, setBallsPerOver] = useState(6);
+  const [totalOvers, setTotalOvers] = useState(CRICKET_CONSTANTS.DEFAULT_TOTAL_OVERS);
+  const [ballsPerOver, setBallsPerOver] = useState(CRICKET_CONSTANTS.DEFAULT_BALLS_PER_OVER);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const generateMatchId = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  };
-
   const handleCreate = async () => {
-    if (!matchName.trim()) {
-      setError('Please enter a match name');
+    const nameValidation = validateMatchName(matchName);
+    if (!nameValidation.isValid) {
+      setError(nameValidation.error || ERROR_MESSAGES.MATCH_NAME_REQUIRED);
       return;
     }
 
-    if (isPrivate && !matchSecret.trim()) {
-      setError('Please enter a secret for private match');
+    const secretValidation = validateMatchSecret(matchSecret, isPrivate);
+    if (!secretValidation.isValid) {
+      setError(secretValidation.error || ERROR_MESSAGES.SECRET_REQUIRED);
+      return;
+    }
+
+    const oversValidation = validateOversConfig(totalOvers, ballsPerOver);
+    if (!oversValidation.isValid) {
+      setError(oversValidation.error || 'Invalid match configuration');
       return;
     }
 
@@ -53,7 +61,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
       };
 
       if (isPrivate && matchSecret.trim()) {
-        matchData.secret_hash = btoa(matchSecret.trim());
+        matchData.secret_hash = await hashSecret(matchSecret.trim());
       }
 
       const { error: insertError } = await supabase
@@ -61,14 +69,12 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         .insert(matchData);
 
       if (insertError) {
-        console.error('Insert error details:', insertError);
         throw insertError;
       }
 
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
-    } catch (err: any) {
-      console.error('Error creating match:', err);
-      const errorMessage = err?.message || 'Failed to create match. Please try again.';
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_CREATE;
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -110,10 +116,10 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
               </label>
               <input
                 type="number"
-                min="1"
-                max="50"
+                min={CRICKET_CONSTANTS.MIN_OVERS}
+                max={CRICKET_CONSTANTS.MAX_OVERS}
                 value={totalOvers}
-                onChange={(e) => setTotalOvers(parseInt(e.target.value) || 1)}
+                onChange={(e) => setTotalOvers(parseInt(e.target.value) || CRICKET_CONSTANTS.DEFAULT_TOTAL_OVERS)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-400"
               />
             </div>
@@ -123,10 +129,10 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
               </label>
               <input
                 type="number"
-                min="5"
-                max="8"
+                min={CRICKET_CONSTANTS.MIN_BALLS_PER_OVER}
+                max={CRICKET_CONSTANTS.MAX_BALLS_PER_OVER}
                 value={ballsPerOver}
-                onChange={(e) => setBallsPerOver(parseInt(e.target.value) || 6)}
+                onChange={(e) => setBallsPerOver(parseInt(e.target.value) || CRICKET_CONSTANTS.DEFAULT_BALLS_PER_OVER)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-400"
               />
             </div>

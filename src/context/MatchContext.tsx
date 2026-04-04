@@ -1,4 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
+import { SecureStorage } from '../lib/security';
+import { STORAGE_KEYS } from '../lib/constants';
+import { generateMatchId } from '../lib/match';
 
 interface MatchContextType {
   matchId: string | null;
@@ -12,31 +15,26 @@ const MatchContext = createContext<MatchContextType | undefined>(undefined);
 
 export function MatchProvider({ children }: { children: ReactNode }) {
   const [matchId, setMatchIdState] = useState<string | null>(() => {
-    return sessionStorage.getItem('current_match_id');
+    return SecureStorage.getItem(STORAGE_KEYS.MATCH_ID);
   });
 
   const [matchName, setMatchNameState] = useState<string>(() => {
-    return sessionStorage.getItem('current_match_name') || '';
+    return SecureStorage.getItem(STORAGE_KEYS.MATCH_NAME) || '';
   });
 
   const setMatchId = (id: string | null) => {
     setMatchIdState(id);
     if (id) {
-      sessionStorage.setItem('current_match_id', id);
+      SecureStorage.setItem(STORAGE_KEYS.MATCH_ID, id);
     } else {
-      sessionStorage.removeItem('current_match_id');
-      sessionStorage.removeItem('current_match_name');
+      SecureStorage.removeItem(STORAGE_KEYS.MATCH_ID);
+      SecureStorage.removeItem(STORAGE_KEYS.MATCH_NAME);
     }
   };
 
   const setMatchName = (name: string) => {
     setMatchNameState(name);
-    sessionStorage.setItem('current_match_name', name);
-  };
-
-  const generateMatchId = () => {
-    const id = Math.floor(100000 + Math.random() * 900000).toString();
-    return id;
+    SecureStorage.setItem(STORAGE_KEYS.MATCH_NAME, name);
   };
 
   return (

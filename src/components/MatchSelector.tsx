@@ -5,6 +5,9 @@ import { MatchList } from './MatchList';
 import { CreateMatchModal } from './CreateMatchModal';
 import { SecretPrompt } from './SecretPrompt';
 import { supabase } from '../lib/supabase';
+import { hashSecret, verifySecret, SecureStorage } from '../lib/security';
+import { validateMatchId, normalizeMatchId } from '../lib/validation';
+import { STORAGE_KEYS, ERROR_MESSAGES } from '../lib/constants';
 
 export function MatchSelector() {
   const { setMatchId, setMatchName } = useMatch();
@@ -27,34 +30,36 @@ export function MatchSelector() {
       setMatchName(name);
     }
     if (matchSecret) {
-      sessionStorage.setItem(`match_secret_${matchId}`, matchSecret);
+      SecureStorage.setItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${matchId}`, matchSecret);
     }
   };
 
   const handleJoinMatch = async () => {
-    if (!joinId.trim()) {
-      setError('Please enter a Match ID');
+    const validation = validateMatchId(joinId);
+    if (!validation.isValid) {
+      setError(validation.error || ERROR_MESSAGES.MATCH_ID_REQUIRED);
       return;
     }
 
     setError('');
 
     try {
+      const normalizedId = normalizeMatchId(joinId);
       const { data: match, error: matchError } = await supabase
         .from('matches')
         .select('match_id, name, is_public')
-        .eq('match_id', joinId.trim().toUpperCase())
+        .eq('match_id', normalizedId)
         .maybeSingle();
 
       if (matchError) throw matchError;
 
       if (!match) {
-        setError('Match not found');
+        setError(ERROR_MESSAGES.MATCH_NOT_FOUND);
         return;
       }
 
       if (!match.is_public) {
-        const storedSecret = sessionStorage.getItem(`match_secret_${match.match_id}`);
+        const storedSecret = SecureStorage.getItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${match.match_id}`);
         if (!storedSecret) {
           setPendingMatch({ id: match.match_id, name: match.name });
           setShowSecretPrompt(true);
@@ -67,7 +72,14 @@ export function MatchSelector() {
           .eq('match_id', match.match_id)
           .maybeSingle();
 
-        if (!matchData || matchData.secret_hash !== btoa(storedSecret)) {
+        if (!matchData || !matchData.secret_hash) {
+          setPendingMatch({ id: match.match_id, name: match.name });
+          setShowSecretPrompt(true);
+          return;
+        }
+
+        const isValid = await verifySecret(storedSecret, matchData.secret_hash);
+        if (!isValid) {
           setPendingMatch({ id: match.match_id, name: match.name });
           setShowSecretPrompt(true);
           return;
@@ -77,8 +89,7 @@ export function MatchSelector() {
       setMatchId(match.match_id);
       setMatchName(match.name);
     } catch (err) {
-      console.error('Error joining match:', err);
-      setError('Failed to join match');
+      setError(ERROR_MESSAGES.FAILED_TO_JOIN);
     }
   };
 
@@ -92,26 +103,25 @@ export function MatchSelector() {
         .eq('match_id', pendingMatch.id)
         .maybeSingle();
 
-      if (!match) {
-        setError('Match not found');
+      if (!match || !match.secret_hash) {
+        setError(ERROR_MESSAGES.MATCH_NOT_FOUND);
         setShowSecretPrompt(false);
         return;
       }
 
-      const secretHash = btoa(secret);
-      if (match.secret_hash === secretHash) {
-        sessionStorage.setItem(`match_secret_${pendingMatch.id}`, secret);
+      const isValid = await verifySecret(secret, match.secret_hash);
+      if (isValid) {
+        SecureStorage.setItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${pendingMatch.id}`, secret);
         setMatchId(pendingMatch.id);
         setMatchName(pendingMatch.name);
         setShowSecretPrompt(false);
         setPendingMatch(null);
         return { success: true };
       } else {
-        return { success: false, error: 'Incorrect secret' };
+        return { success: false, error: ERROR_MESSAGES.INCORRECT_SECRET };
       }
     } catch (err) {
-      console.error('Error verifying secret:', err);
-      return { success: false, error: 'Failed to verify secret' };
+      return { success: false, error: ERROR_MESSAGES.FAILED_TO_JOIN };
     }
   };
 
