@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { X, Lock, LockKeyhole } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Lock, LockKeyhole, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { hashSecret } from '../lib/security';
 import { generateMatchId } from '../lib/match';
 import { validateMatchName, validateMatchSecret, validateOversConfig } from '../lib/validation';
 import { CRICKET_CONSTANTS, ERROR_MESSAGES } from '../lib/constants';
+import { getGlobalRules } from '../lib/rulesEngine';
+import { createMatchAccess } from '../lib/accessControl';
+import { MatchRules } from '../lib/types';
 
 interface CreateMatchModalProps {
   onClose: () => void;
@@ -15,10 +18,23 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
   const [matchName, setMatchName] = useState('');
   const [matchSecret, setMatchSecret] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [totalOvers, setTotalOvers] = useState(CRICKET_CONSTANTS.DEFAULT_TOTAL_OVERS);
-  const [ballsPerOver, setBallsPerOver] = useState(CRICKET_CONSTANTS.DEFAULT_BALLS_PER_OVER);
+  const [umpirePasscode, setUmpirePasscode] = useState('');
+  const [scorerPasscode, setScorerPasscode] = useState('');
+  const [customizeRules, setCustomizeRules] = useState(false);
+  const [rules, setRules] = useState<MatchRules | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadGlobalRules();
+  }, []);
+
+  const loadGlobalRules = async () => {
+    const globalRules = await getGlobalRules();
+    if (globalRules) {
+      setRules(globalRules);
+    }
+  };
 
   const handleCreate = async () => {
     const nameValidation = validateMatchName(matchName);
@@ -33,9 +49,18 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
       return;
     }
 
-    const oversValidation = validateOversConfig(totalOvers, ballsPerOver);
-    if (!oversValidation.isValid) {
-      setError(oversValidation.error || 'Invalid match configuration');
+    if (!umpirePasscode.trim() || umpirePasscode.length < 4) {
+      setError('Umpire passcode must be at least 4 characters');
+      return;
+    }
+
+    if (!scorerPasscode.trim() || scorerPasscode.length < 4) {
+      setError('Scorer passcode must be at least 4 characters');
+      return;
+    }
+
+    if (!rules) {
+      setError('Rules not loaded. Please refresh and try again.');
       return;
     }
 
@@ -45,19 +70,20 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
     try {
       const newMatchId = generateMatchId();
 
-      const matchData: {
-        match_id: string;
-        name: string;
-        is_public: boolean;
-        total_overs: number;
-        balls_per_over: number;
-        secret_hash?: string;
-      } = {
+      const matchData: any = {
         match_id: newMatchId,
         name: matchName.trim(),
         is_public: !isPrivate,
-        total_overs: totalOvers,
-        balls_per_over: ballsPerOver,
+        total_overs: rules.overs_per_innings * 2,
+        balls_per_over: rules.balls_per_over,
+        current_innings: 1,
+        overs_per_innings: rules.overs_per_innings,
+        max_wickets: rules.max_wickets,
+        max_overs_per_bowler: rules.max_overs_per_bowler,
+        wide_no_runs: rules.wide_no_runs,
+        wide_no_ball_count: rules.wide_no_ball_count,
+        legbye_no_runs: rules.legbye_no_runs,
+        consecutive_overs_required: rules.consecutive_overs_required,
       };
 
       if (isPrivate && matchSecret.trim()) {
@@ -72,6 +98,8 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         throw insertError;
       }
 
+      await createMatchAccess(newMatchId, umpirePasscode, scorerPasscode);
+
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_CREATE;
@@ -81,9 +109,25 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
     }
   };
 
+  const updateRule = <K extends keyof MatchRules>(key: K, value: MatchRules[K]) => {
+    if (rules) {
+      setRules({ ...rules, [key]: value });
+    }
+  };
+
+  if (!rules) {
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+          <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-md">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+      <div className="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-2xl my-8">
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
           <h2 className="text-xl font-bold text-yellow-400">Create New Match</h2>
           <button
@@ -94,7 +138,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 max-h-[80vh] overflow-y-auto">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Match Name *
@@ -109,31 +153,102 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
             />
           </div>
 
+          <div className="bg-gray-800/30 border border-gray-700 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-200">Match Rules</h3>
+              <button
+                onClick={() => setCustomizeRules(!customizeRules)}
+                className="flex items-center gap-2 text-sm text-yellow-400 hover:text-yellow-300"
+              >
+                <Settings size={16} />
+                {customizeRules ? 'Use Defaults' : 'Customize'}
+              </button>
+            </div>
+
+            {!customizeRules ? (
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="text-gray-400">Overs per innings:</div>
+                <div className="text-white">{rules.overs_per_innings}</div>
+                <div className="text-gray-400">Balls per over:</div>
+                <div className="text-white">{rules.balls_per_over}</div>
+                <div className="text-gray-400">Max wickets:</div>
+                <div className="text-white">{rules.max_wickets}</div>
+                <div className="text-gray-400">Max overs per bowler:</div>
+                <div className="text-white">{rules.max_overs_per_bowler}</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Overs per innings</label>
+                  <input
+                    type="number"
+                    value={rules.overs_per_innings}
+                    onChange={(e) => updateRule('overs_per_innings', parseInt(e.target.value))}
+                    min="1"
+                    max="50"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Balls per over</label>
+                  <input
+                    type="number"
+                    value={rules.balls_per_over}
+                    onChange={(e) => updateRule('balls_per_over', parseInt(e.target.value))}
+                    min="4"
+                    max="8"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Max wickets</label>
+                  <input
+                    type="number"
+                    value={rules.max_wickets}
+                    onChange={(e) => updateRule('max_wickets', parseInt(e.target.value))}
+                    min="1"
+                    max="11"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Max overs per bowler</label>
+                  <input
+                    type="number"
+                    value={rules.max_overs_per_bowler}
+                    onChange={(e) => updateRule('max_overs_per_bowler', parseInt(e.target.value))}
+                    min="1"
+                    max="10"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Total Overs *
+                Umpire Passcode *
               </label>
               <input
-                type="number"
-                min={CRICKET_CONSTANTS.MIN_OVERS}
-                max={CRICKET_CONSTANTS.MAX_OVERS}
-                value={totalOvers}
-                onChange={(e) => setTotalOvers(parseInt(e.target.value) || CRICKET_CONSTANTS.DEFAULT_TOTAL_OVERS)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-400"
+                type="password"
+                value={umpirePasscode}
+                onChange={(e) => setUmpirePasscode(e.target.value)}
+                placeholder="Min 4 characters"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Balls Per Over *
+                Scorer Passcode *
               </label>
               <input
-                type="number"
-                min={CRICKET_CONSTANTS.MIN_BALLS_PER_OVER}
-                max={CRICKET_CONSTANTS.MAX_BALLS_PER_OVER}
-                value={ballsPerOver}
-                onChange={(e) => setBallsPerOver(parseInt(e.target.value) || CRICKET_CONSTANTS.DEFAULT_BALLS_PER_OVER)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-400"
+                type="password"
+                value={scorerPasscode}
+                onChange={(e) => setScorerPasscode(e.target.value)}
+                placeholder="Min 4 characters"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
               />
             </div>
           </div>

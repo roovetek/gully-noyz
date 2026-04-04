@@ -2,12 +2,15 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 import { SecureStorage } from '../lib/security';
 import { STORAGE_KEYS } from '../lib/constants';
 import { generateMatchId } from '../lib/match';
+import { UserRole } from '../lib/types';
 
 interface MatchContextType {
   matchId: string | null;
   matchName: string;
+  userRole: UserRole;
   setMatchId: (id: string | null) => void;
   setMatchName: (name: string) => void;
+  setUserRole: (role: UserRole) => void;
   generateMatchId: () => string;
 }
 
@@ -22,6 +25,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     return SecureStorage.getItem(STORAGE_KEYS.MATCH_NAME) || '';
   });
 
+  const [userRole, setUserRoleState] = useState<UserRole>(null);
+
   const setMatchId = (id: string | null) => {
     setMatchIdState(id);
     if (id) {
@@ -29,6 +34,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     } else {
       SecureStorage.removeItem(STORAGE_KEYS.MATCH_ID);
       SecureStorage.removeItem(STORAGE_KEYS.MATCH_NAME);
+      setUserRoleState(null);
     }
   };
 
@@ -37,8 +43,12 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     SecureStorage.setItem(STORAGE_KEYS.MATCH_NAME, name);
   };
 
+  const setUserRole = (role: UserRole) => {
+    setUserRoleState(role);
+  };
+
   return (
-    <MatchContext.Provider value={{ matchId, matchName, setMatchId, setMatchName, generateMatchId }}>
+    <MatchContext.Provider value={{ matchId, matchName, userRole, setMatchId, setMatchName, setUserRole, generateMatchId }}>
       {children}
     </MatchContext.Provider>
   );
