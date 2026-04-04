@@ -53,29 +53,23 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
       };
 
       if (isPrivate && matchSecret.trim()) {
-        const { data: hashData, error: hashError } = await supabase.rpc(
-          'crypt',
-          { password: matchSecret.trim(), salt: await supabase.rpc('gen_salt', { type: 'bf' }) }
-        );
-
-        if (hashError) {
-          const secretHash = btoa(matchSecret.trim());
-          matchData.secret_hash = secretHash;
-        } else {
-          matchData.secret_hash = hashData;
-        }
+        matchData.secret_hash = btoa(matchSecret.trim());
       }
 
       const { error: insertError } = await supabase
         .from('matches')
         .insert(matchData);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Insert error details:', insertError);
+        throw insertError;
+      }
 
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating match:', err);
-      setError('Failed to create match. Please try again.');
+      const errorMessage = err?.message || 'Failed to create match. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
