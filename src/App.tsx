@@ -6,23 +6,32 @@ import { Timeline } from './components/Timeline';
 import { MatchStats } from './components/MatchStats';
 import { MatchInfo } from './components/MatchInfo';
 import { AdminDashboard } from './components/AdminDashboard';
+import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 
 function AppContent() {
-  const { matchId } = useMatch();
+  const { matchId, setMatchId } = useMatch();
   const [activeTab, setActiveTab] = useState<'record' | 'timeline' | 'stats' | 'info'>('record');
   const [showAdmin, setShowAdmin] = useState(false);
 
-  if (!matchId) {
-    return <MatchSelector />;
-  }
-
   return (
     <div className="min-h-screen bg-black">
-      {activeTab === 'record' && <Record />}
-      {activeTab === 'timeline' && <Timeline />}
-      {activeTab === 'stats' && <MatchStats />}
-      {activeTab === 'info' && <MatchInfo onOpenAdmin={() => setShowAdmin(true)} />}
+      <Header
+        onHome={() => setMatchId(null)}
+        onOpenAdmin={() => setShowAdmin(true)}
+      />
+      <div className="pt-16">
+        {!matchId ? (
+          <MatchSelector />
+        ) : (
+          <>
+            {activeTab === 'record' && <Record />}
+            {activeTab === 'timeline' && <Timeline />}
+            {activeTab === 'stats' && <MatchStats />}
+            {activeTab === 'info' && <MatchInfo onOpenAdmin={() => setShowAdmin(true)} />}
+          </>
+        )}
+      </div>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
     </div>

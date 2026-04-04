@@ -1,4 +1,4 @@
-import { ShieldCheck, Info, Home } from 'lucide-react';
+import { ShieldCheck, Info } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 
 interface MatchInfoProps {
@@ -6,30 +6,17 @@ interface MatchInfoProps {
 }
 
 export function MatchInfo({ onOpenAdmin }: MatchInfoProps) {
-  const { matchId, matchName, setMatchId } = useMatch();
-
-  const handleLeave = () => {
-    setMatchId(null);
-  };
+  const { matchId, matchName } = useMatch();
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className="min-h-screen bg-black text-white pb-20 pt-16">
       <div className="p-4 bg-gray-900 border-b border-gray-800">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Info size={24} className="text-green-400" />
-            <div>
-              <h1 className="text-2xl font-bold text-white">Match Info</h1>
-              <p className="text-sm text-gray-400">Quick access to the current match and admin tools.</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <Info size={24} className="text-green-400" />
+          <div>
+            <h1 className="text-2xl font-bold text-white">Match Info</h1>
+            <p className="text-sm text-gray-400">Quick access to the current match and admin tools.</p>
           </div>
-          <button
-            onClick={handleLeave}
-            className="flex items-center gap-2 rounded-lg border border-green-400 px-4 py-2 text-sm text-green-400 hover:bg-green-400/10 transition-colors"
-          >
-            <Home size={16} />
-            Leave Match
-          </button>
         </div>
       </div>
 

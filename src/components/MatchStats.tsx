@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { supabase, Clip } from '../lib/supabase';
 import { getTestDataFilter } from '../lib/testDataFilter';
@@ -20,7 +20,7 @@ interface OverData {
 }
 
 export function MatchStats() {
-  const { matchId, matchName, setMatchId } = useMatch();
+  const { matchId, matchName } = useMatch();
   const [innings1Summary, setInnings1Summary] = useState<InningsSummary | null>(null);
   const [innings2Summary, setInnings2Summary] = useState<InningsSummary | null>(null);
   const [expandedInnings, setExpandedInnings] = useState<number | null>(null);
@@ -165,10 +165,6 @@ export function MatchStats() {
     return 'text-yellow-400 bg-yellow-500/20 border-yellow-500';
   };
 
-  const handleHome = () => {
-    setMatchId(null);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -183,16 +179,9 @@ export function MatchStats() {
   const summaries = [innings2Summary, innings1Summary].filter(Boolean) as InningsSummary[];
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className="min-h-screen bg-black text-white pb-20 pt-16">
       <div className="p-4 mb-4 bg-gray-900 border-b border-gray-800">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={handleHome}
-            className="bg-gray-900 p-2 rounded-lg border border-green-400 hover:bg-green-400/20 transition-colors"
-          >
-            <Home size={24} className="text-green-400" />
-          </button>
-
+        <div className="flex items-center justify-center mb-4">
           <div className="bg-gray-900 px-4 py-2 rounded-lg border border-yellow-400">
             <div>
               {matchName && (
