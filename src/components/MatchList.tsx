@@ -12,6 +12,17 @@ interface MatchInfo {
   balls_per_over: number;
   clip_count: number;
   latest_activity: string;
+  created_at: string;
+  innings1_runs: number;
+  innings1_wickets: number;
+  innings1_overs: string;
+  innings2_runs: number;
+  innings2_wickets: number;
+  innings2_overs: string;
+  current_innings: number;
+  current_over: number;
+  current_ball: number;
+  is_completed: boolean;
 }
 
 interface MatchListProps {
@@ -58,7 +69,7 @@ export function MatchList({ onBack }: MatchListProps) {
 
     const { data: matchesData, error: matchesError } = await supabase
       .from('matches')
-      .select('match_id, name, is_public, total_overs, balls_per_over')
+      .select('match_id, name, is_public, total_overs, balls_per_over, created_at')
       .order('created_at', { ascending: false });
 
     if (matchesError) {
@@ -69,22 +80,24 @@ export function MatchList({ onBack }: MatchListProps) {
 
     const { data: clipsData, error: clipsError } = await supabase
       .from('clips')
-      .select('match_id, created_at');
+      .select('*');
 
     if (clipsError) {
       console.error('Error fetching clips:', clipsError);
     }
 
-    const clipsByMatch = new Map<string, { count: number; latestActivity: string }>();
+    const clipsByMatch = new Map<string, { count: number; latestActivity: string; clips: any[] }>();
     clipsData?.forEach((clip) => {
       const existing = clipsByMatch.get(clip.match_id);
       if (!existing) {
         clipsByMatch.set(clip.match_id, {
           count: 1,
           latestActivity: clip.created_at,
+          clips: [clip],
         });
       } else {
         existing.count += 1;
+        existing.clips.push(clip);
         if (new Date(clip.created_at) > new Date(existing.latestActivity)) {
           existing.latestActivity = clip.created_at;
         }
@@ -94,8 +107,53 @@ export function MatchList({ onBack }: MatchListProps) {
     const matchList = matchesData.map((match) => {
       const clipInfo = clipsByMatch.get(match.match_id) || {
         count: 0,
-        latestActivity: new Date().toISOString(),
+        latestActivity: match.created_at,
+        clips: [],
       };
+
+      const innings1Clips = clipInfo.clips.filter(c => c.innings_number === 1);
+      const innings2Clips = clipInfo.clips.filter(c => c.innings_number === 2);
+
+      const calculateInningsStats = (clips: any[], ballsPerOver: number) => {
+        if (clips.length === 0) return { runs: 0, wickets: 0, overs: '0' };
+
+        const totalRuns = clips.reduce((sum, clip) => {
+          const runs = parseInt(clip.outcome);
+          return sum + (isNaN(runs) ? 0 : runs);
+        }, 0);
+
+        const totalWickets = clips.filter(c =>
+          c.outcome === 'wicket' ||
+          ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket', 'hitballtwice', 'obstructing', 'timedout', 'handledball'].includes(c.outcome)
+        ).length;
+
+        const uniqueOvers = new Set(clips.map(c => c.over_number));
+        const maxOver = Math.max(...Array.from(uniqueOvers));
+        const ballsInLastOver = clips.filter(c => c.over_number === maxOver).length;
+        const completedOvers = ballsInLastOver === ballsPerOver ? maxOver : maxOver - 1;
+        const remainingBalls = ballsInLastOver === ballsPerOver ? 0 : ballsInLastOver;
+        const totalOvers = remainingBalls === 0 ? completedOvers.toString() : `${completedOvers}.${remainingBalls}`;
+
+        return { runs: totalRuns, wickets: totalWickets, overs: totalOvers };
+      };
+
+      const innings1Stats = calculateInningsStats(innings1Clips, match.balls_per_over);
+      const innings2Stats = calculateInningsStats(innings2Clips, match.balls_per_over);
+
+      const allClips = clipInfo.clips.sort((a, b) => {
+        if (a.innings_number !== b.innings_number) return b.innings_number - a.innings_number;
+        if (a.over_number !== b.over_number) return b.over_number - a.over_number;
+        return b.ball_number - a.ball_number;
+      });
+
+      const latestClip = allClips[0];
+      const currentInnings = latestClip?.innings_number || 0;
+      const currentOver = latestClip?.over_number || 0;
+      const currentBall = latestClip?.ball_number || 0;
+
+      const isCompleted = innings2Clips.length > 0 &&
+        (innings2Stats.wickets >= 10 || parseFloat(innings2Stats.overs) >= match.total_overs);
+
       return {
         match_id: match.match_id,
         name: match.name,
@@ -104,6 +162,17 @@ export function MatchList({ onBack }: MatchListProps) {
         balls_per_over: match.balls_per_over,
         clip_count: clipInfo.count,
         latest_activity: clipInfo.latestActivity,
+        created_at: match.created_at,
+        innings1_runs: innings1Stats.runs,
+        innings1_wickets: innings1Stats.wickets,
+        innings1_overs: innings1Stats.overs,
+        innings2_runs: innings2Stats.runs,
+        innings2_wickets: innings2Stats.wickets,
+        innings2_overs: innings2Stats.overs,
+        current_innings: currentInnings,
+        current_over: currentOver,
+        current_ball: currentBall,
+        is_completed: isCompleted,
       };
     });
 
@@ -337,46 +406,100 @@ export function MatchList({ onBack }: MatchListProps) {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 flex-1">
-                      <h3 className="text-white font-bold text-lg">
-                        {match.name || 'Unnamed Match'}
-                      </h3>
-                      <button
-                        onClick={(e) => handleRenameClick(match, e)}
-                        className="p-1 hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Edit2 size={14} className="text-gray-400" />
-                      </button>
+                    <div className="flex flex-col flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-white font-bold text-lg">
+                          {match.name || 'Unnamed Match'}
+                        </h3>
+                        <button
+                          onClick={(e) => handleRenameClick(match, e)}
+                          className="p-1 hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Edit2 size={14} className="text-gray-400" />
+                        </button>
+                      </div>
+                      <div className="text-gray-500 text-xs">
+                        Created: {new Date(match.created_at).toLocaleString()}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="text-gray-500 text-sm">
-                  {getTimeAgo(match.latest_activity)}
+              </div>
+
+              <div className="flex items-center gap-2 mb-3">
+                <div className="bg-yellow-400/20 border border-yellow-400 rounded px-3 py-1">
+                  <span className="text-yellow-400 font-mono font-bold text-xs">
+                    {match.match_id}
+                  </span>
+                </div>
+                <div className="bg-blue-400/20 border border-blue-400 rounded px-2 py-1 text-xs">
+                  <span className="text-blue-400">{match.total_overs} overs</span>
+                </div>
+                <div className="bg-gray-500/20 border border-gray-500 rounded px-2 py-1 text-xs">
+                  <span className="text-gray-400">{match.balls_per_over} balls/over</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="bg-yellow-400/20 border border-yellow-400 rounded px-3 py-1">
-                    <span className="text-yellow-400 font-mono font-bold">
-                      {match.match_id}
-                    </span>
+              {match.is_completed ? (
+                <div className="bg-green-500/20 border border-green-400 rounded-lg p-3 mb-3">
+                  <div className="text-green-400 font-bold text-sm mb-2">Match Completed</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <div className="text-orange-400 mb-1">Innings 1</div>
+                      <div className="text-white font-bold">{match.innings1_runs}/{match.innings1_wickets}</div>
+                      <div className="text-gray-400">{match.innings1_overs} overs</div>
+                    </div>
+                    <div>
+                      <div className="text-orange-400 mb-1">Innings 2</div>
+                      <div className="text-white font-bold">{match.innings2_runs}/{match.innings2_wickets}</div>
+                      <div className="text-gray-400">{match.innings2_overs} overs</div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : match.current_innings > 0 ? (
+                <div className="bg-orange-500/20 border border-orange-400 rounded-lg p-3 mb-3">
+                  <div className="text-orange-400 font-bold text-sm mb-2">
+                    In Progress - Innings {match.current_innings}
+                  </div>
+                  <div className="text-xs">
+                    {match.current_innings === 1 ? (
+                      <div>
+                        <div className="text-white font-bold text-lg">{match.innings1_runs}/{match.innings1_wickets}</div>
+                        <div className="text-gray-400">{match.innings1_overs} overs</div>
+                        <div className="text-gray-500 mt-1">Current: Over {match.current_over}, Ball {match.current_ball}</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="text-gray-400 mb-1">Innings 1</div>
+                            <div className="text-white font-bold">{match.innings1_runs}/{match.innings1_wickets}</div>
+                            <div className="text-gray-400 text-xs">{match.innings1_overs} overs</div>
+                          </div>
+                          <div>
+                            <div className="text-orange-400 mb-1">Innings 2</div>
+                            <div className="text-white font-bold">{match.innings2_runs}/{match.innings2_wickets}</div>
+                            <div className="text-gray-400 text-xs">{match.innings2_overs} overs</div>
+                          </div>
+                        </div>
+                        <div className="text-gray-500">Current: Over {match.current_over}, Ball {match.current_ball}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 mb-3">
+                  <div className="text-gray-400 text-sm">No clips recorded yet</div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1 text-green-400">
-                    <Video size={16} />
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <div className="flex items-center gap-1">
+                    <Video size={14} />
                     <span>{match.clip_count} clips</span>
                   </div>
-                  <div className="flex items-center gap-1 text-blue-400">
-                    <span>{match.total_overs} overs</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-gray-400">
-                    <span>{match.balls_per_over} balls</span>
-                  </div>
+                  <div>{getTimeAgo(match.latest_activity)}</div>
                 </div>
                 <button
                   onClick={() => handleJoinMatch(match)}
