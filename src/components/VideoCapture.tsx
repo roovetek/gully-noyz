@@ -10,13 +10,35 @@ interface RecordingData {
   timestamp: number;
 }
 
+function getCameraUserMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'name' in err) {
+    const name = (err as { name?: string }).name;
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      return 'Camera or microphone access was denied. Allow access in your browser settings and try again.';
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      return 'No camera or microphone was found.';
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+      return 'Camera or microphone is in use by another app.';
+    }
+    if (name === 'OverconstrainedError') {
+      return 'The camera could not use the requested settings. Try another device or browser.';
+    }
+    if (name === 'SecurityError') {
+      return 'Camera access is blocked. Use HTTPS or localhost.';
+    }
+  }
+  return 'Could not access the camera or microphone. Check permissions and try again.';
+}
+
 export function VideoCapture() {
   const { matchId } = useMatch();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -31,6 +53,7 @@ export function VideoCapture() {
   const [confirmBallNumber, setConfirmBallNumber] = useState(1);
   const [usedBalls, setUsedBalls] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [ballsPerOver, setBallsPerOver] = useState(6);
   const [totalOvers, setTotalOvers] = useState(20);
   const [totalRuns, setTotalRuns] = useState(0);
@@ -41,27 +64,35 @@ export function VideoCapture() {
   const [inningsComplete, setInningsComplete] = useState(false);
 
   useEffect(() => {
-    const fetchMatchConfig = async () => {
+    if (!matchId) return;
+
+    let cancelled = false;
+
+    const load = async () => {
       const { data: matchData } = await supabase
         .from('matches')
         .select('balls_per_over, total_overs, current_innings')
         .eq('match_id', matchId)
         .maybeSingle();
 
+      if (cancelled) return;
+
+      const bpo = matchData?.balls_per_over ?? 6;
+      const to = matchData?.total_overs ?? 20;
+      const inningsForQuery = matchData?.current_innings ?? currentInnings;
+
       if (matchData) {
-        setBallsPerOver(matchData.balls_per_over);
-        setTotalOvers(matchData.total_overs);
+        setBallsPerOver(bpo);
+        setTotalOvers(to);
         setCurrentInnings(matchData.current_innings);
       }
-    };
 
-    const fetchMatchStats = async () => {
       const testDataFilter = getTestDataFilter();
       let clipsQuery = supabase
         .from('clips')
         .select('outcome, over_number, ball_number, innings_number')
         .eq('match_id', matchId)
-        .eq('innings_number', currentInnings);
+        .eq('innings_number', inningsForQuery);
 
       if (testDataFilter !== undefined) {
         clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
@@ -70,6 +101,8 @@ export function VideoCapture() {
       const { data: clips } = await clipsQuery
         .order('over_number', { ascending: false })
         .order('ball_number', { ascending: false });
+
+      if (cancelled) return;
 
       if (clips && clips.length > 0) {
         const runs = clips.reduce((total, clip) => {
@@ -83,17 +116,17 @@ export function VideoCapture() {
         const maxOver = Math.max(...Array.from(uniqueOvers));
         const ballsInCurrentOver = clips.filter(clip => clip.over_number === maxOver).length;
 
-        const completedOvers = ballsInCurrentOver === ballsPerOver ? maxOver : maxOver - 1;
-        const currentBalls = ballsInCurrentOver === ballsPerOver ? 0 : ballsInCurrentOver;
+        const completedOvers = ballsInCurrentOver === bpo ? maxOver : maxOver - 1;
+        const currentBalls = ballsInCurrentOver === bpo ? 0 : ballsInCurrentOver;
 
         setTotalRuns(runs);
         setTotalWickets(wickets);
         setCurrentOvers(currentBalls === 0 ? completedOvers.toString() : `${completedOvers}.${currentBalls}`);
 
         const latestClip = clips[0];
-        if (latestClip.over_number >= totalOvers && latestClip.ball_number >= ballsPerOver) {
+        if (latestClip.over_number >= to && latestClip.ball_number >= bpo) {
           setInningsComplete(true);
-        } else if (latestClip.ball_number >= ballsPerOver) {
+        } else if (latestClip.ball_number >= bpo) {
           setOverNumber(latestClip.over_number + 1);
           setBallNumber(1);
         } else {
@@ -108,37 +141,38 @@ export function VideoCapture() {
         setCurrentOvers('0');
         setInningsComplete(false);
       }
-    };
 
-    const fetchUsedBalls = async () => {
-      const testDataFilter = getTestDataFilter();
-      let clipsQuery = supabase
+      let usedQuery = supabase
         .from('clips')
         .select('ball_number')
         .eq('match_id', matchId)
-        .eq('innings_number', currentInnings)
+        .eq('innings_number', inningsForQuery)
         .eq('over_number', overNumber);
 
       if (testDataFilter !== undefined) {
-        clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+        usedQuery = usedQuery.eq('is_test_data', testDataFilter);
       }
 
-      const { data } = await clipsQuery;
+      const { data: usedData } = await usedQuery;
 
-      if (data) {
-        setUsedBalls(new Set(data.map(clip => clip.ball_number)));
+      if (cancelled) return;
+
+      if (usedData) {
+        setUsedBalls(new Set(usedData.map(clip => clip.ball_number)));
       }
     };
 
-    if (matchId) {
-      fetchMatchConfig();
-      fetchMatchStats();
-      fetchUsedBalls();
-    }
-  }, [matchId, overNumber, ballsPerOver, currentInnings, totalOvers]);
+    load();
 
-  const initCamera = async () => {
-    if (cameraInitialized) return;
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId, overNumber, currentInnings]);
+
+  const initCamera = async (): Promise<boolean> => {
+    if (cameraInitialized) return true;
+
+    setCameraError(null);
 
     try {
       const constraints: MediaStreamConstraints = {
@@ -157,15 +191,21 @@ export function VideoCapture() {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('capture', 'environment');
         setCameraInitialized(true);
+        return true;
       }
+      setCameraError('Video element is not ready. Try again.');
+      return false;
     } catch (error) {
       console.error('Camera access error:', error);
+      setCameraError(getCameraUserMessage(error));
+      return false;
     }
   };
 
   const handleRecordToggle = async () => {
     if (!isRecording) {
-      await initCamera();
+      const ok = await initCamera();
+      if (!ok || !videoRef.current?.srcObject) return;
       startRecording();
     } else {
       stopRecording();
@@ -197,7 +237,8 @@ export function VideoCapture() {
 
   const startRecording = async () => {
     if (!videoRef.current?.srcObject) {
-      await initCamera();
+      const ok = await initCamera();
+      if (!ok) return;
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
@@ -381,6 +422,22 @@ export function VideoCapture() {
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="absolute top-0 left-0 right-0 p-4 text-white z-10 space-y-2">
+        {cameraError && (
+          <div
+            role="alert"
+            className="bg-red-500/20 border border-red-400 rounded-lg p-3 flex flex-col gap-2"
+          >
+            <p className="text-red-200 text-sm">{cameraError}</p>
+            <button
+              type="button"
+              onClick={() => setCameraError(null)}
+              className="self-start text-xs text-gray-300 underline hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 mb-2 text-center border-2 border-orange-400">
           <span className="text-orange-400 text-lg font-bold">Innings {currentInnings}</span>
           <span className="text-gray-400 text-sm ml-2">of 2</span>
