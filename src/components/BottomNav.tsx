@@ -1,8 +1,8 @@
-import { Video, Clock, BarChart3 } from 'lucide-react';
+import { Video, Clock, BarChart3, Info } from 'lucide-react';
 
 interface BottomNavProps {
-  activeTab: 'record' | 'timeline' | 'stats';
-  onTabChange: (tab: 'record' | 'timeline' | 'stats') => void;
+  activeTab: 'record' | 'timeline' | 'stats' | 'info';
+  onTabChange: (tab: 'record' | 'timeline' | 'stats' | 'info') => void;
 }
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -43,6 +43,18 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         >
           <BarChart3 size={24} />
           <span className="text-xs font-semibold">Stats</span>
+        </button>
+
+        <button
+          onClick={() => onTabChange('info')}
+          className={`flex-1 py-4 flex flex-col items-center gap-1 transition-colors ${
+            activeTab === 'info'
+              ? 'text-yellow-400 bg-gray-800'
+              : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Info size={24} />
+          <span className="text-xs font-semibold">Info</span>
         </button>
       </div>
     </nav>
