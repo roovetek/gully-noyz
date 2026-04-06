@@ -13,8 +13,7 @@ import { GullyRulz } from './components/AppInfo';
 
 function AppContent() {
   const { matchId, setMatchId } = useMatch();
-  const [activeTab, setActiveTab] = useState<'record' | 'timeline' | 'stats' | 'info' | 'gullyRulz'>('record');
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState<'record' | 'timeline' | 'stats' | 'info' | 'gullyRulz' | 'admin'>('record');
   const prevMatchId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -33,15 +32,25 @@ function AppContent() {
     setMatchId(null);
   };
 
+  const handleOpenAdmin = () => {
+    setActiveTab('admin');
+  };
+
+  const handleCloseAdmin = () => {
+    setActiveTab('record');
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col">
       <Header
         onHome={handleGoHome}
-        onOpenAdmin={() => setShowAdmin(true)}
+        onOpenAdmin={handleOpenAdmin}
         onOpenGullyRulz={handleOpenGullyRulz}
       />
       <div className="pt-16 flex-1">
-        {activeTab === 'gullyRulz' ? (
+        {activeTab === 'admin' ? (
+          <AdminDashboard onClose={handleCloseAdmin} />
+        ) : activeTab === 'gullyRulz' ? (
           <GullyRulz />
         ) : !matchId ? (
           <MatchSelector />
@@ -54,9 +63,10 @@ function AppContent() {
           </div>
         )}
       </div>
-      <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
+      {activeTab !== 'admin' && activeTab !== 'gullyRulz' && (
+        <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
+      )}
       {!matchId && activeTab !== 'gullyRulz' && <Footer />}
-      {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
     </div>
   );
 }

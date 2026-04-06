@@ -91,3 +91,31 @@ export async function changeGlobalAdminPasscode(
   }
   return { ok: false, message: row?.error || 'Failed to change password.' };
 }
+
+export interface ResetMatchCredentialsInput {
+  matchId: string;
+  adminPasscode: string;
+  newMatchSecret: string;
+  newUmpirePasscode: string;
+  newScorerPasscode: string;
+}
+
+export async function resetMatchCredentials(
+  input: ResetMatchCredentialsInput
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { data, error } = await supabase.rpc('admin_reset_match_credentials', {
+    p_match_id: input.matchId.trim().toUpperCase(),
+    p_admin_passcode: input.adminPasscode.trim(),
+    p_new_match_secret: input.newMatchSecret.trim(),
+    p_new_umpire_passcode: input.newUmpirePasscode.trim(),
+    p_new_scorer_passcode: input.newScorerPasscode.trim(),
+  });
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+  const row = data as { ok?: boolean; error?: string } | null;
+  if (row?.ok) {
+    return { ok: true };
+  }
+  return { ok: false, message: row?.error || 'Failed to reset match credentials.' };
+}

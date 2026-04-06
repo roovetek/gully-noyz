@@ -257,6 +257,25 @@ The app includes automatic version tracking:
 - Supabase URL
 - Feature flags status
 
+### Automatic Versioning (Per Push/Deploy)
+
+The build now generates deployment metadata automatically, so you do not need to manually edit a version on each push.
+
+- `VITE_APP_VERSION` format: `<package.json version>+<suffix>`
+  - Example: `0.0.0+a73a63a`
+- `suffix` priority:
+  1. CI commit SHA (Bolt/Git provider env, if available)
+  2. Local git short SHA
+  3. Build timestamp fallback
+- `VITE_BUILD_DATE` is generated at build time using ISO format.
+
+For Bolt.new deployments, this means each new build after a push gets a fresh version/build-time pair even if semver is unchanged.
+
+Quick verification in Admin Dashboard:
+- `Version` should include the semver prefix and a changing suffix.
+- `Build date` should reflect the latest deploy/build time.
+- Two separate builds should show different metadata values.
+
 ### Health Check System
 
 **Automatic checks every minute:**

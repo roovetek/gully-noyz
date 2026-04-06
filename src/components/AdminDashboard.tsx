@@ -11,7 +11,6 @@ import { getDeploymentInfo, validateDeploymentSync, DeploymentInfo } from '../li
 
 interface AdminDashboardProps {
   onClose: () => void;
-  onCreateMatch?: () => void;
 }
 
 interface AdminMatchRow {
@@ -20,7 +19,7 @@ interface AdminMatchRow {
   created_at: string;
 }
 
-export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) {
+export function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   /** In-memory only: used for RPCs that require dashboard passcode (save rules, delete match). */
   const [adminSessionSecret, setAdminSessionSecret] = useState('');
@@ -189,14 +188,14 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
 
   if (!isAuthenticated) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="min-h-screen bg-black text-white p-4 pb-24">
+        <div className="mx-auto w-full max-w-md bg-white rounded-lg shadow-xl mt-4">
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-3">
               <Settings className="text-gray-700" size={24} />
               <h2 className="text-xl font-semibold text-gray-900">Dashboard admin</h2>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close dashboard">
               <X size={24} />
             </button>
           </div>
@@ -242,8 +241,8 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
 
   if (!rules && adminSection === 'rules') {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-4">
+      <div className="min-h-screen bg-black text-white p-4 pb-24">
+        <div className="mx-auto bg-white rounded-lg p-6 flex flex-col items-center gap-4 max-w-md mt-4">
           <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
         </div>
@@ -252,9 +251,9 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full my-8">
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-lg z-10 gap-2">
+    <div className="min-h-screen bg-black text-white p-4 pb-24">
+      <div className="mx-auto bg-white rounded-lg shadow-xl max-w-4xl w-full my-4">
+        <div className="flex items-center justify-between p-6 border-b bg-white rounded-t-lg gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <Settings className="text-gray-700" size={24} />
             <h2 className="text-xl font-semibold text-gray-900 truncate">Dashboard</h2>
@@ -265,7 +264,7 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
         </div>
 
         <div className="p-6 space-y-6">
-          <div className="flex gap-2 border-b border-gray-200 pb-3">
+          <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
             <button
               type="button"
               onClick={() => setAdminSection('rules')}
@@ -446,79 +445,6 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
 
           {adminSection === 'rules' && (
             <>
-          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
-            <div className="flex items-center gap-2 text-gray-900 font-semibold">
-              <Lock size={18} className="text-gray-600" />
-              Change dashboard password
-            </div>
-            <p className="text-xs text-gray-500">
-              This is only for this screen (global rules, delete matches). Match umpire/scorer passcodes are set per match when you create it.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Current</label>
-                <input
-                  type="password"
-                  value={dashPwCurrent}
-                  onChange={(e) => {
-                    setDashPwCurrent(e.target.value);
-                    setDashPwFeedback(null);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="current-password"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">New (min 4)</label>
-                <input
-                  type="password"
-                  value={dashPwNew}
-                  onChange={(e) => {
-                    setDashPwNew(e.target.value);
-                    setDashPwFeedback(null);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="new-password"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Confirm new</label>
-                <input
-                  type="password"
-                  value={dashPwConfirm}
-                  onChange={(e) => {
-                    setDashPwConfirm(e.target.value);
-                    setDashPwFeedback(null);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="new-password"
-                />
-              </div>
-            </div>
-            {dashPwFeedback && (
-              <div
-                className={`text-sm p-2 rounded ${
-                  dashPwFeedback.type === 'ok' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
-                }`}
-              >
-                {dashPwFeedback.text}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleDashboardPasswordChange}
-              disabled={
-                dashPwSaving ||
-                !dashPwCurrent.trim() ||
-                !dashPwNew.trim() ||
-                !dashPwConfirm.trim()
-              }
-              className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 disabled:opacity-50"
-            >
-              {dashPwSaving ? 'Updating…' : 'Update dashboard password'}
-            </button>
-          </div>
-
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
             <div className="text-sm text-yellow-800">
@@ -658,20 +584,83 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
                 <Save size={20} />
                 {saveStatus === 'saving' ? 'Saving...' : 'Save Global Rules'}
               </button>
-
-              {onCreateMatch && (
-                <button
-                  onClick={() => {
-                    onCreateMatch();
-                    closeDashboard();
-                  }}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
-                >
-                  Create New Match
-                </button>
-              )}
             </div>
           )}
+
+          <div className="border-t border-gray-200 pt-6">
+            <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2 text-gray-900 font-semibold">
+                <Lock size={18} className="text-gray-600" />
+                Change dashboard password
+              </div>
+              <p className="text-xs text-gray-500">
+                This only affects dashboard admin access.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Current</label>
+                  <input
+                    type="password"
+                    value={dashPwCurrent}
+                    onChange={(e) => {
+                      setDashPwCurrent(e.target.value);
+                      setDashPwFeedback(null);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">New (min 4)</label>
+                  <input
+                    type="password"
+                    value={dashPwNew}
+                    onChange={(e) => {
+                      setDashPwNew(e.target.value);
+                      setDashPwFeedback(null);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Confirm new</label>
+                  <input
+                    type="password"
+                    value={dashPwConfirm}
+                    onChange={(e) => {
+                      setDashPwConfirm(e.target.value);
+                      setDashPwFeedback(null);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+              {dashPwFeedback && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    dashPwFeedback.type === 'ok' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
+                  }`}
+                >
+                  {dashPwFeedback.text}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleDashboardPasswordChange}
+                disabled={
+                  dashPwSaving ||
+                  !dashPwCurrent.trim() ||
+                  !dashPwNew.trim() ||
+                  !dashPwConfirm.trim()
+                }
+                className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 disabled:opacity-50"
+              >
+                {dashPwSaving ? 'Updating…' : 'Update dashboard password'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
