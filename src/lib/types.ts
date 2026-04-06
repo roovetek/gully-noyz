@@ -30,6 +30,11 @@ export interface Match extends MatchRules {
   winner: string | null;
 }
 
+/** Match-side roles (passcode in access_roles). Umpire = match authority; no separate "match admin". */
+export type MatchAccessRole = 'umpire' | 'scorer' | 'captain';
+
+export type UserRole = MatchAccessRole | null;
+
 export interface MatchRuleOverride {
   id: string;
   match_id: string;
@@ -38,15 +43,15 @@ export interface MatchRuleOverride {
   override_value: string;
   reason: string;
   applied_at: string;
-  applied_by_role: 'admin' | 'umpire';
+  applied_by_role: 'umpire';
   reverted_at: string | null;
-  reverted_by_role: 'admin' | 'umpire' | null;
+  reverted_by_role: 'umpire' | null;
 }
 
 export interface AccessRole {
   id: string;
   match_id: string;
-  role: 'admin' | 'umpire' | 'scorer' | 'captain';
+  role: MatchAccessRole;
   passcode_hash: string;
   created_at: string;
 }
@@ -58,7 +63,7 @@ export interface MatchResult {
   winner: string | null;
   completion_reason: string;
   completed_at: string;
-  completed_by_role: 'admin' | 'umpire';
+  completed_by_role: 'umpire';
 }
 
 export interface Clip {
@@ -94,8 +99,6 @@ export type BallOutcome =
   | 'out_runout'
   | 'out_stumped'
   | 'out_hitwicket';
-
-export type UserRole = 'admin' | 'umpire' | 'scorer' | 'captain' | null;
 
 export interface BowlerStats {
   name: string;

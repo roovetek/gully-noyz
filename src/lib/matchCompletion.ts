@@ -1,10 +1,9 @@
 import { supabase } from './supabase';
-import { UserRole } from './types';
 
 export async function completeMatch(
   matchId: string,
   resultType: 'winner' | 'tie' | 'abandoned',
-  completedByRole: 'admin' | 'umpire',
+  completedByRole: 'umpire',
   winner?: string,
   reason?: string
 ): Promise<void> {
@@ -41,7 +40,7 @@ export async function completeMatch(
 export async function abandonMatch(
   matchId: string,
   reason: string,
-  abandonedByRole: 'admin' | 'umpire'
+  abandonedByRole: 'umpire'
 ): Promise<void> {
   await completeMatch(matchId, 'abandoned', abandonedByRole, undefined, reason);
 }
