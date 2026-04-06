@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Circle, Square, ChevronUp, Pause, Play } from 'lucide-react';
+import { Circle, Square, ChevronUp, Pause, Play, SkipForward } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
-import { supabase } from '../lib/supabase';
+import { executeTrackedAction, supabase } from '../lib/supabase';
 import { getTestDataFilter } from '../lib/testDataFilter';
+import { logger } from '../lib/logger';
+
+import { validateRole } from '../lib/accessControl';
 
 interface RecordingData {
   blob: Blob;
@@ -62,6 +65,21 @@ export function VideoCapture() {
   const [cameraInitialized, setCameraInitialized] = useState(false);
   const [currentInnings, setCurrentInnings] = useState(1);
   const [inningsComplete, setInningsComplete] = useState(false);
+
+  // Over-complete confirm/edit state
+  const [overCompleteData, setOverCompleteData] = useState<{
+    completedOver: number;
+    nextOver: number;
+    advanceInnings: boolean;
+  } | null>(null);
+  const [showUmpireAuth, setShowUmpireAuth] = useState(false);
+  const [umpirePasscodeInput, setUmpirePasscodeInput] = useState('');
+  const [umpireAuthError, setUmpireAuthError] = useState('');
+  const [umpireAuthenticated, setUmpireAuthenticated] = useState(false);
+  const [editableOverBalls, setEditableOverBalls] = useState<
+    { id: string; ball_number: number; outcome: string }[]
+  >([]);
+  const [editBallOutcome, setEditBallOutcome] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!matchId) return;
@@ -312,7 +330,7 @@ export function VideoCapture() {
   };
 
   const uploadClip = async () => {
-    if (!recordingData || !selectedOutcome || !matchId) return;
+    if (!selectedOutcome || !matchId) return;
 
     if (selectedOutcome === 'wicket' && !selectedOutType) {
       setError('Please select the type of dismissal');
@@ -328,66 +346,68 @@ export function VideoCapture() {
     setError(null);
 
     try {
-      const fileName = `${matchId}/${Date.now()}.webm`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('clips')
-        .upload(fileName, recordingData.blob, {
-          contentType: 'video/webm',
-          upsert: false,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('clips')
-        .getPublicUrl(fileName);
-
       const outcomeValue = selectedOutcome === 'wicket' && selectedOutType ? selectedOutType.toLowerCase() : selectedOutcome.toLowerCase();
 
-      const { error: dbError } = await supabase.from('clips').insert({
-        match_id: matchId,
-        innings_number: currentInnings,
-        over_number: overNumber,
-        ball_number: confirmBallNumber,
-        outcome: outcomeValue,
-        video_url: urlData.publicUrl,
-        duration: recordingData.duration,
+      let videoUrl: string | null = null;
+
+      if (recordingData) {
+        const fileName = `${matchId}/${Date.now()}.webm`;
+        const { error: uploadError } = await executeTrackedAction({
+          tableName: 'storage.clips',
+          action: 'upload',
+          matchId,
+          payload: { fileName, contentType: 'video/webm' },
+          execute: () =>
+            supabase.storage
+              .from('clips')
+              .upload(fileName, recordingData.blob, {
+                contentType: 'video/webm',
+                upsert: false,
+              }),
+        });
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('clips').getPublicUrl(fileName);
+        videoUrl = urlData.publicUrl;
+      }
+
+      const { error: dbError } = await executeTrackedAction({
+        tableName: 'clips',
+        action: 'insert',
+        payload: {
+          match_id: matchId,
+          innings_number: currentInnings,
+          over_number: overNumber,
+          ball_number: confirmBallNumber,
+          outcome: outcomeValue,
+          video_url: videoUrl,
+          duration: recordingData?.duration ?? 0,
+        },
+        matchId,
+        execute: async () =>
+          supabase.from('clips').insert({
+            match_id: matchId,
+            innings_number: currentInnings,
+            over_number: overNumber,
+            ball_number: confirmBallNumber,
+            outcome: outcomeValue,
+            video_url: videoUrl,
+            duration: recordingData?.duration ?? 0,
+          }),
       });
 
       if (dbError) {
-        if (dbError.code === '23505') {
-          setError(`Ball ${confirmBallNumber} has already been recorded for Over ${overNumber} in Innings ${currentInnings}`);
-          setIsUploading(false);
-          return;
-        }
-        throw dbError;
+        logger.error('Failed to insert clip into database', dbError);
+        setError('Failed to save ball outcome. Please try again.');
+        setIsUploading(false);
+        return;
       }
-
-      console.log('Clip uploaded successfully', {
-        matchId,
-        inningsNumber: currentInnings,
-        overNumber,
-        ballNumber: confirmBallNumber,
-        outcome: selectedOutcome,
-        url: urlData.publicUrl,
-      });
 
       const nextBall = confirmBallNumber + 1;
       if (nextBall > ballsPerOver) {
+        // Over is complete — show confirm/edit modal instead of auto-advancing
         const nextOver = overNumber + 1;
-        if (nextOver > totalOvers && currentInnings === 1) {
-          await supabase
-            .from('matches')
-            .update({ current_innings: 2 })
-            .eq('match_id', matchId);
-          setCurrentInnings(2);
-          setOverNumber(1);
-          setBallNumber(1);
-          setInningsComplete(false);
-        } else {
-          setOverNumber(nextOver);
-          setBallNumber(1);
-        }
+        const advanceInnings = nextOver > totalOvers && currentInnings === 1;
+        setOverCompleteData({ completedOver: overNumber, nextOver, advanceInnings });
       } else {
         setBallNumber(nextBall);
       }
@@ -397,10 +417,83 @@ export function VideoCapture() {
       setSelectedOutType(null);
       setRecordingData(null);
       setIsUploading(false);
-    } catch (error) {
-      console.error('Upload error:', error);
+    } catch (err) {
+      console.error('Upload error:', err);
       setIsUploading(false);
     }
+  };
+
+  const handleSkipRecording = () => {
+    setRecordingData(null);
+    setConfirmBallNumber(ballNumber);
+    setShowDrawer(true);
+  };
+
+  const handleOverConfirm = async () => {
+    if (!overCompleteData || !matchId) return;
+    const { nextOver, advanceInnings } = overCompleteData;
+    setOverCompleteData(null);
+    setUmpireAuthenticated(false);
+    if (advanceInnings) {
+      await executeTrackedAction({
+        tableName: 'matches',
+        action: 'advance_innings',
+        matchId,
+        payload: { current_innings: 2 },
+        execute: async () =>
+          supabase
+            .from('matches')
+            .update({ current_innings: 2 })
+            .eq('match_id', matchId)
+            .select('match_id, current_innings')
+            .single(),
+      });
+      setCurrentInnings(2);
+      setOverNumber(1);
+      setBallNumber(1);
+      setInningsComplete(false);
+    } else {
+      setOverNumber(nextOver);
+      setBallNumber(1);
+    }
+  };
+
+  const handleUmpireAuth = async () => {
+    if (!matchId) return;
+    setUmpireAuthError('');
+    const valid = await validateRole(matchId, umpirePasscodeInput, 'umpire');
+    if (!valid) {
+      setUmpireAuthError('Incorrect umpire passcode');
+      return;
+    }
+    setUmpireAuthenticated(true);
+    setShowUmpireAuth(false);
+    setUmpirePasscodeInput('');
+    // Load balls for the completed over
+    if (overCompleteData) {
+      const { data } = await supabase
+        .from('clips')
+        .select('id, ball_number, outcome')
+        .eq('match_id', matchId)
+        .eq('innings_number', currentInnings)
+        .eq('over_number', overCompleteData.completedOver)
+        .order('ball_number');
+      setEditableOverBalls(data || []);
+      setEditBallOutcome({});
+    }
+  };
+
+  const handleSaveOverEdits = async () => {
+    const entries = Object.entries(editBallOutcome);
+    for (const [ballNum, newOutcome] of entries) {
+      const ball = editableOverBalls.find(b => b.ball_number === parseInt(ballNum));
+      if (ball && ball.id) {
+        await supabase.from('clips').update({ outcome: newOutcome }).eq('id', ball.id);
+      }
+    }
+    setUmpireAuthenticated(false);
+    setEditableOverBalls([]);
+    setEditBallOutcome({});
   };
 
   const handleCancel = () => {
@@ -502,12 +595,12 @@ export function VideoCapture() {
           )}
           <button
             onClick={handleRecordToggle}
-            disabled={showDrawer || inningsComplete}
+            disabled={showDrawer || inningsComplete || !!overCompleteData}
             className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg ${
               isRecording
                 ? 'bg-red-500 hover:bg-red-600'
                 : 'bg-green-500 hover:bg-green-600'
-            } ${showDrawer || inningsComplete ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${showDrawer || inningsComplete || overCompleteData ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isRecording ? (
               <Square size={32} className="text-white fill-white" />
@@ -515,8 +608,134 @@ export function VideoCapture() {
               <Circle size={32} className="text-white fill-white" />
             )}
           </button>
+          {!isRecording && !showDrawer && !inningsComplete && !overCompleteData && (
+            <button
+              onClick={handleSkipRecording}
+              className="w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 flex items-center justify-center transition-all shadow-lg"
+              title="Log outcome without recording"
+            >
+              <SkipForward size={22} className="text-white" />
+            </button>
+          )}
         </div>
       </div>
+
+      {overCompleteData && !showUmpireAuth && !umpireAuthenticated && (
+        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-yellow-400 rounded-t-2xl p-6 pb-24 z-20">
+          <div className="flex justify-center mb-4">
+            <ChevronUp size={32} className="text-gray-600" />
+          </div>
+          <h3 className="text-white text-xl font-bold mb-2 text-center">
+            Over {overCompleteData.completedOver} Complete!
+          </h3>
+          <p className="text-gray-400 text-sm text-center mb-6">
+            {overCompleteData.advanceInnings
+              ? 'Innings 1 complete. Ready to start Innings 2.'
+              : `Ready for Over ${overCompleteData.nextOver}`}
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleOverConfirm}
+              className="w-full bg-green-500 hover:bg-green-600 text-black font-bold py-4 rounded-lg transition-colors"
+            >
+              Confirm &amp; Continue
+            </button>
+            <button
+              onClick={() => setShowUmpireAuth(true)}
+              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 rounded-lg transition-colors"
+            >
+              Edit Over (Umpire)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showUmpireAuth && (
+        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-yellow-400 rounded-t-2xl p-6 pb-24 z-20">
+          <div className="flex justify-center mb-4">
+            <ChevronUp size={32} className="text-gray-600" />
+          </div>
+          <h3 className="text-white text-xl font-bold mb-4 text-center">Umpire Verification</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="text-gray-400 text-sm mb-2 block">Umpire Passcode</label>
+              <input
+                type="password"
+                value={umpirePasscodeInput}
+                onChange={(e) => setUmpirePasscodeInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleUmpireAuth()}
+                placeholder="Enter umpire passcode"
+                className="w-full bg-gray-800 border border-gray-700 text-white py-3 px-4 rounded-lg focus:outline-none focus:border-yellow-400"
+              />
+            </div>
+            {umpireAuthError && (
+              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3">
+                <p className="text-red-400 text-sm">{umpireAuthError}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowUmpireAuth(false); setUmpireAuthError(''); setUmpirePasscodeInput(''); }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUmpireAuth}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 rounded-lg transition-colors"
+              >
+                Verify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {umpireAuthenticated && editableOverBalls.length > 0 && (
+        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-yellow-400 rounded-t-2xl p-6 pb-24 z-20 overflow-y-auto max-h-[80vh]">
+          <div className="flex justify-center mb-4">
+            <ChevronUp size={32} className="text-gray-600" />
+          </div>
+          <h3 className="text-white text-xl font-bold mb-4 text-center">
+            Edit Over {overCompleteData?.completedOver}
+          </h3>
+          <div className="space-y-3 mb-6">
+            {editableOverBalls.map((ball) => (
+              <div key={ball.ball_number} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+                <span className="text-gray-400 text-sm w-16 flex-shrink-0">Ball {ball.ball_number}</span>
+                <select
+                  value={editBallOutcome[ball.ball_number] ?? ball.outcome}
+                  onChange={(e) => setEditBallOutcome(prev => ({ ...prev, [ball.ball_number]: e.target.value }))}
+                  className="flex-1 bg-gray-700 border border-gray-600 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-yellow-400"
+                >
+                  <option value="dot">Dot</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="6">6</option>
+                  <option value="wicket">Wicket</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={async () => { await handleSaveOverEdits(); await handleOverConfirm(); }}
+              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 rounded-lg transition-colors"
+            >
+              Save Changes &amp; Continue
+            </button>
+            <button
+              onClick={handleOverConfirm}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg transition-colors"
+            >
+              Continue Without Changes
+            </button>
+          </div>
+        </div>
+      )}
 
       {showDrawer && (
         <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-green-400 rounded-t-2xl p-6 pb-24 z-20 animate-slide-up">

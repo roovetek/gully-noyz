@@ -238,7 +238,7 @@ export function MatchList({ onBack }: MatchListProps) {
     }
     setEditingMatch(match.match_id);
     setNewName(match.name);
-    setNewTotalOvers(match.total_overs);
+    setNewTotalOvers(Math.round(match.total_overs / 2));
     setNewBallsPerOver(match.balls_per_over);
   };
 
@@ -250,7 +250,8 @@ export function MatchList({ onBack }: MatchListProps) {
         .from('matches')
         .update({
           name: newName.trim(),
-          total_overs: newTotalOvers,
+          total_overs: newTotalOvers * 2,
+          overs_per_innings: newTotalOvers,
           balls_per_over: newBallsPerOver
         })
         .eq('match_id', matchId);
@@ -292,7 +293,7 @@ export function MatchList({ onBack }: MatchListProps) {
           if (matchToEdit) {
             setEditingMatch(pendingMatch.id);
             setNewName(matchToEdit.name);
-            setNewTotalOvers(matchToEdit.total_overs);
+            setNewTotalOvers(Math.round(matchToEdit.total_overs / 2));
             setNewBallsPerOver(matchToEdit.balls_per_over);
           }
         }
@@ -386,12 +387,13 @@ export function MatchList({ onBack }: MatchListProps) {
                           max="50"
                           value={newTotalOvers}
                           onChange={(e) => setNewTotalOvers(parseInt(e.target.value) || 1)}
-                          placeholder="Overs"
-                          className="bg-gray-800 border border-yellow-400 rounded px-3 py-1 text-white w-20"
+                          placeholder="Overs/innings"
+                          className="bg-gray-800 border border-yellow-400 rounded px-3 py-1 text-white w-24"
+                          title="Overs per innings"
                         />
                         <input
                           type="number"
-                          min="5"
+                          min="2"
                           max="8"
                           value={newBallsPerOver}
                           onChange={(e) => setNewBallsPerOver(parseInt(e.target.value) || 6)}
@@ -447,7 +449,7 @@ export function MatchList({ onBack }: MatchListProps) {
                   </span>
                 </div>
                 <div className="bg-blue-400/20 border border-blue-400 rounded px-2 py-1 text-xs">
-                  <span className="text-blue-400">{match.total_overs} overs</span>
+                  <span className="text-blue-400">{Math.round(match.total_overs / 2)} overs/innings</span>
                 </div>
                 <div className="bg-gray-500/20 border border-gray-500 rounded px-2 py-1 text-xs">
                   <span className="text-gray-400">{match.balls_per_over} balls/over</span>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MatchProvider, useMatch } from './context/MatchContext';
 import { MatchSelector } from './components/MatchSelector';
 import { Record } from './components/Record';
@@ -15,6 +15,14 @@ function AppContent() {
   const { matchId, setMatchId } = useMatch();
   const [activeTab, setActiveTab] = useState<'record' | 'timeline' | 'stats' | 'info' | 'gullyRulz'>('record');
   const [showAdmin, setShowAdmin] = useState(false);
+  const prevMatchId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (matchId && !prevMatchId.current) {
+      setActiveTab('record');
+    }
+    prevMatchId.current = matchId;
+  }, [matchId]);
 
   const handleOpenGullyRulz = () => {
     setActiveTab('gullyRulz');
@@ -28,7 +36,9 @@ function AppContent() {
         onOpenGullyRulz={handleOpenGullyRulz}
       />
       <div className="pt-16 flex-1">
-        {!matchId ? (
+        {activeTab === 'gullyRulz' ? (
+          <GullyRulz />
+        ) : !matchId ? (
           <MatchSelector />
         ) : (
           <div className="pb-24">
@@ -38,7 +48,6 @@ function AppContent() {
             {activeTab === 'info' && <MatchInfo />}
           </div>
         )}
-        {activeTab === 'gullyRulz' && <GullyRulz />}
       </div>
       <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
       <Footer />

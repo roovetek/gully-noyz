@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Lock, LockKeyhole, Settings } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { executeTrackedAction, supabase } from '../lib/supabase';
 import { hashSecret } from '../lib/security';
 import { generateMatchId } from '../lib/match';
 import { validateMatchName, validateMatchSecret, validateOversConfig } from '../lib/validation';
@@ -8,6 +8,7 @@ import { CRICKET_CONSTANTS, ERROR_MESSAGES } from '../lib/constants';
 import { getGlobalRules } from '../lib/rulesEngine';
 import { createMatchAccess } from '../lib/accessControl';
 import { MatchRules } from '../lib/types';
+import { logger } from '../lib/logger';
 
 interface CreateMatchModalProps {
   onClose: () => void;
@@ -17,9 +18,9 @@ interface CreateMatchModalProps {
 export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalProps) {
   const [matchName, setMatchName] = useState('');
   const [matchSecret, setMatchSecret] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
   const [umpirePasscode, setUmpirePasscode] = useState('');
   const [scorerPasscode, setScorerPasscode] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [customizeRules, setCustomizeRules] = useState(false);
   const [rules, setRules] = useState<MatchRules | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,11 +60,6 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
       return;
     }
 
-    if (!rules) {
-      setError('Rules not loaded. Please refresh and try again.');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
@@ -90,15 +86,22 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         matchData.secret_hash = await hashSecret(matchSecret.trim());
       }
 
-      const { error: insertError } = await supabase
-        .from('matches')
-        .insert(matchData);
+      const { error: insertError } = await executeTrackedAction({
+        tableName: 'matches',
+        action: 'insert',
+        payload: matchData,
+        matchId: newMatchId,
+        execute: async (traceId) => {
+          return await supabase.from('matches').insert(matchData);
+        },
+      });
 
       if (insertError) {
+        logger.error('Failed to create match', { matchData, error: insertError });
         throw insertError;
       }
 
-      await createMatchAccess(newMatchId, umpirePasscode, scorerPasscode);
+      await createMatchAccess(newMatchId, umpirePasscode.trim(), scorerPasscode.trim());
 
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
     } catch (err) {
@@ -195,7 +198,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                     type="number"
                     value={rules.balls_per_over}
                     onChange={(e) => updateRule('balls_per_over', parseInt(e.target.value))}
-                    min="4"
+                    min="2"
                     max="8"
                     className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
                   />
@@ -226,31 +229,36 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Umpire Passcode *
-              </label>
-              <input
-                type="password"
-                value={umpirePasscode}
-                onChange={(e) => setUmpirePasscode(e.target.value)}
-                placeholder="Min 4 characters"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Scorer Passcode *
-              </label>
-              <input
-                type="password"
-                value={scorerPasscode}
-                onChange={(e) => setScorerPasscode(e.target.value)}
-                placeholder="Min 4 characters"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Umpire Passcode <span className="text-gray-500 text-xs">(min 4 characters)</span>
+            </label>
+            <input
+              type="password"
+              value={umpirePasscode}
+              onChange={(e) => setUmpirePasscode(e.target.value)}
+              placeholder="Set a passcode for the umpire"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Match authority (not the dashboard admin). Used to verify umpire actions during the match.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Scorer passcode <span className="text-gray-500 text-xs">(min 4 characters)</span>
+            </label>
+            <input
+              type="password"
+              value={scorerPasscode}
+              onChange={(e) => setScorerPasscode(e.target.value)}
+              placeholder="Set a passcode for the scorer"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Used when joining the match as scorer
+            </p>
           </div>
 
           <div className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg">
