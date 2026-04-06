@@ -1,11 +1,12 @@
-import { supabase } from './supabase';
+import { executeTrackedAction, supabase } from './supabase';
 import { hashSecret } from './security';
-import { UserRole } from './types';
+import { MatchAccessRole } from './types';
+import { validateGlobalAdminPasscode } from './globalAdmin';
 
 export async function validateRole(
   matchId: string,
   passcode: string,
-  role: UserRole
+  role: MatchAccessRole
 ): Promise<boolean> {
   if (!role) return false;
 
@@ -26,31 +27,35 @@ export async function validateRole(
 export async function createMatchAccess(
   matchId: string,
   umpireCode: string,
-  scorerCode: string,
-  adminCode?: string
+  scorerCode: string
 ): Promise<void> {
   const roles = [
-    { match_id: matchId, role: 'umpire', passcode_hash: await hashSecret(umpireCode) },
-    { match_id: matchId, role: 'scorer', passcode_hash: await hashSecret(scorerCode) },
+    { match_id: matchId, role: 'umpire' as const, passcode_hash: await hashSecret(umpireCode) },
+    { match_id: matchId, role: 'scorer' as const, passcode_hash: await hashSecret(scorerCode) },
   ];
 
-  if (adminCode) {
-    roles.push({ match_id: matchId, role: 'admin', passcode_hash: await hashSecret(adminCode) });
-  }
+  const requestPayload = roles.map(({ match_id, role }) => ({ match_id, role }));
 
-  const { error } = await supabase
-    .from('access_roles')
-    .insert(roles);
+  const { error } = await executeTrackedAction({
+    tableName: 'access_roles',
+    action: 'insert',
+    matchId,
+    payload: requestPayload,
+    execute: async (_traceId) =>
+      supabase
+        .from('access_roles')
+        .insert(roles)
+        .select('id, match_id, role, created_at'),
+  });
 
   if (error) {
     throw new Error(`Failed to create match access: ${error.message}`);
   }
 }
 
-export function hasPermission(role: UserRole, action: string): boolean {
-  const permissions: Record<string, string[]> = {
-    admin: ['view', 'score', 'override_rules', 'complete_match', 'edit_global_rules', 'create_match'],
-    umpire: ['view', 'override_rules', 'complete_match', 'delete_ball'],
+export function hasPermission(role: MatchAccessRole | null, action: string): boolean {
+  const permissions: Record<MatchAccessRole, string[]> = {
+    umpire: ['view', 'score', 'override_rules', 'complete_match', 'delete_ball'],
     scorer: ['view', 'score'],
     captain: ['view'],
   };
@@ -59,14 +64,7 @@ export function hasPermission(role: UserRole, action: string): boolean {
   return permissions[role]?.includes(action) || false;
 }
 
+/** Dashboard (global) admin — password stored in `app_settings`, not per-match roles. */
 export async function validateAdminAccess(passcode: string): Promise<boolean> {
-  const adminHash = await hashSecret(passcode);
-  const storedHash = localStorage.getItem('admin_passcode_hash');
-
-  if (!storedHash) {
-    localStorage.setItem('admin_passcode_hash', adminHash);
-    return true;
-  }
-
-  return adminHash === storedHash;
+  return validateGlobalAdminPasscode(passcode);
 }

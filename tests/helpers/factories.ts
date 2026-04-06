@@ -1,4 +1,5 @@
 import { supabase } from '../../src/lib/supabase';
+import { ExecuteTrackedAction } from '../../src/lib/supabase';
 
 export interface TestMatchOptions {
   match_id?: string;
@@ -93,6 +94,21 @@ export async function setupTestMatch(config: {
 }
 
 export async function cleanupTestData() {
-  await supabase.from('clips').delete().eq('is_test_data', true);
-  await supabase.from('matches').delete().eq('is_test_data', true);
+  await ExecuteTrackedAction({
+    tableName: 'clips',
+    action: 'delete',
+    payload: { is_test_data: true },
+    execute: async (traceId) => {
+      return await supabase.from('clips').delete().eq('is_test_data', true);
+    },
+  });
+
+  await ExecuteTrackedAction({
+    tableName: 'matches',
+    action: 'delete',
+    payload: { is_test_data: true },
+    execute: async (traceId) => {
+      return await supabase.from('matches').delete().eq('is_test_data', true);
+    },
+  });
 }

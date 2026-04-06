@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Shield, CreditCard as Edit3, Users } from 'lucide-react';
+import { X, Shield, CreditCard as Edit3 } from 'lucide-react';
 import { validateRole } from '../lib/accessControl';
 import { UserRole } from '../lib/types';
 
@@ -17,22 +17,16 @@ export function RoleSelector({ matchId, onRoleSelected, onClose }: RoleSelectorP
 
   const roles: { value: UserRole; label: string; icon: typeof Shield; description: string }[] = [
     {
-      value: 'admin',
-      label: 'Admin',
-      icon: Shield,
-      description: 'Full control: Manage rules, complete matches',
-    },
-    {
       value: 'umpire',
       label: 'Umpire',
-      icon: Users,
-      description: 'Match authority: Override rules, complete matches',
+      icon: Shield,
+      description: 'Match authority: override rules, complete match, delete ball',
     },
     {
       value: 'scorer',
       label: 'Scorer',
       icon: Edit3,
-      description: 'Data entry: Record balls and scoring',
+      description: 'Scoring: record balls and outcomes',
     },
   ];
 

@@ -58,7 +58,7 @@ describe('rulesEngine', () => {
         'max_overs_per_bowler',
         5,
         'Test override',
-        'admin'
+        'umpire'
       );
 
       const rules = await getEffectiveRules(match.match_id);

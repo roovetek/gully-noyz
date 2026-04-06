@@ -94,7 +94,7 @@ export async function applyOverride(
   ruleName: keyof MatchRules,
   newValue: string | number | boolean,
   reason: string,
-  role: 'admin' | 'umpire'
+  role: 'umpire'
 ): Promise<void> {
   const currentRules = await getEffectiveRules(matchId);
   if (!currentRules) throw new Error('Match not found');
@@ -116,7 +116,7 @@ export async function applyOverride(
   if (error) throw new Error(`Failed to apply override: ${error.message}`);
 }
 
-export async function revertOverride(overrideId: string, role: 'admin' | 'umpire'): Promise<void> {
+export async function revertOverride(overrideId: string, role: 'umpire'): Promise<void> {
   const { error } = await supabase
     .from('match_rule_overrides')
     .update({

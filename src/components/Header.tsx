@@ -36,7 +36,7 @@ export function Header({ onHome, onOpenAdmin, onOpenGullyRulz }: HeaderProps) {
             className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 transition-colors"
           >
             <ShieldCheck size={20} />
-            <span className="text-sm font-semibold">Admin</span>
+            <span className="text-sm font-semibold">Dashboard</span>
           </button>
         </div>
       </div>
