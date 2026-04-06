@@ -1,49 +1,14 @@
 import { supabase } from './supabase';
-import { hashSecret } from './security';
 
-const SETTINGS_ROW_ID = 1;
 const LEGACY_LS_KEY = 'admin_passcode_hash';
 
-export interface AppSettingsRow {
-  id: number;
-  global_admin_passcode_hash: string | null;
-  updated_at: string | null;
-}
-
-async function fetchSettingsRow(): Promise<AppSettingsRow | null> {
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('id, global_admin_passcode_hash, updated_at')
-    .eq('id', SETTINGS_ROW_ID)
-    .maybeSingle();
-
+async function rpcConfigured(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_global_admin_password_configured');
   if (error) {
-    console.error('app_settings fetch failed', error);
-    return null;
+    console.error('is_global_admin_password_configured failed', error);
+    return false;
   }
-  return data as AppSettingsRow | null;
-}
-
-/**
- * One-time: copy legacy browser hash into app_settings so existing installs keep the same password.
- */
-async function migrateLegacyLocalStorageHash(storedHash: string | null): Promise<void> {
-  if (!storedHash || typeof window === 'undefined') return;
-  const { error } = await supabase.from('app_settings').upsert(
-    {
-      id: SETTINGS_ROW_ID,
-      global_admin_passcode_hash: storedHash,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'id' }
-  );
-  if (!error) {
-    try {
-      localStorage.removeItem(LEGACY_LS_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
+  return Boolean(data);
 }
 
 /**
@@ -54,84 +19,75 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
   const trimmed = passcode.trim();
   if (!trimmed) return false;
 
-  const inputHash = await hashSecret(trimmed);
-  let row = await fetchSettingsRow();
-
-  if (!row?.global_admin_passcode_hash && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
     const legacy = localStorage.getItem(LEGACY_LS_KEY);
-    if (legacy) {
-      await migrateLegacyLocalStorageHash(legacy);
-      row = await fetchSettingsRow();
+    if (legacy && !(await rpcConfigured())) {
+      const { data: migrated, error } = await supabase.rpc('migrate_legacy_dashboard_hash', {
+        p_legacy_hash: legacy,
+      });
+      if (!error && migrated) {
+        try {
+          localStorage.removeItem(LEGACY_LS_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 
-  const stored = row?.global_admin_passcode_hash ?? null;
+  const configured = await rpcConfigured();
 
-  if (!stored) {
-    const { error } = await supabase.from('app_settings').upsert(
-      {
-        id: SETTINGS_ROW_ID,
-        global_admin_passcode_hash: inputHash,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' }
-    );
-    if (!error && typeof window !== 'undefined') {
+  if (!configured) {
+    const { data, error } = await supabase.rpc('bootstrap_global_admin_passcode', {
+      p_passcode: trimmed,
+    });
+    if (error) {
+      console.error('bootstrap_global_admin_passcode failed', error);
+      return false;
+    }
+    const row = data as { ok?: boolean } | null;
+    const ok = Boolean(row?.ok);
+    if (ok && typeof window !== 'undefined') {
       try {
         localStorage.removeItem(LEGACY_LS_KEY);
       } catch {
         /* ignore */
       }
     }
-    return !error;
+    return ok;
   }
 
-  if (inputHash !== stored) return false;
-
-  if (typeof window !== 'undefined') {
+  const { data: valid, error: verifyError } = await supabase.rpc('verify_global_admin_passcode', {
+    p_passcode: trimmed,
+  });
+  if (verifyError) {
+    console.error('verify_global_admin_passcode failed', verifyError);
+    return false;
+  }
+  if (valid && typeof window !== 'undefined') {
     try {
       localStorage.removeItem(LEGACY_LS_KEY);
     } catch {
       /* ignore */
     }
   }
-  return true;
+  return Boolean(valid);
 }
 
 export async function changeGlobalAdminPasscode(
   currentPasscode: string,
   newPasscode: string
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const newTrim = newPasscode.trim();
-  if (newTrim.length < 4) {
-    return { ok: false, message: 'New password must be at least 4 characters.' };
-  }
-
-  const row = await fetchSettingsRow();
-  const stored = row?.global_admin_passcode_hash ?? null;
-  if (!stored) {
-    return {
-      ok: false,
-      message: 'No dashboard password is set yet. Sign in once to create it.',
-    };
-  }
-
-  const currentHash = await hashSecret(currentPasscode.trim());
-  if (currentHash !== stored) {
-    return { ok: false, message: 'Current password is incorrect.' };
-  }
-
-  const nextHash = await hashSecret(newTrim);
-  const { error } = await supabase
-    .from('app_settings')
-    .update({
-      global_admin_passcode_hash: nextHash,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', SETTINGS_ROW_ID);
-
+  const { data, error } = await supabase.rpc('change_global_admin_passcode', {
+    p_current: currentPasscode.trim(),
+    p_new: newPasscode.trim(),
+  });
   if (error) {
     return { ok: false, message: error.message };
   }
-  return { ok: true };
+  const row = data as { ok?: boolean; error?: string } | null;
+  if (row?.ok) {
+    return { ok: true };
+  }
+  return { ok: false, message: row?.error || 'Failed to change password.' };
 }

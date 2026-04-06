@@ -10,18 +10,17 @@ export async function validateRole(
 ): Promise<boolean> {
   if (!role) return false;
 
-  const hashedPasscode = await hashSecret(passcode);
+  const { data, error } = await supabase.rpc('verify_match_role_passcode', {
+    p_match_id: matchId,
+    p_role: role,
+    p_passcode: passcode,
+  });
 
-  const { data, error } = await supabase
-    .from('access_roles')
-    .select('*')
-    .eq('match_id', matchId)
-    .eq('role', role)
-    .maybeSingle();
-
-  if (error || !data) return false;
-
-  return data.passcode_hash === hashedPasscode;
+  if (error) {
+    console.error('verify_match_role_passcode failed', error);
+    return false;
+  }
+  return Boolean(data);
 }
 
 export async function createMatchAccess(

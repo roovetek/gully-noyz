@@ -21,25 +21,28 @@ export async function getGlobalRules(): Promise<MatchRules | null> {
   };
 }
 
-export async function updateGlobalRules(rules: Partial<MatchRules>, updatedBy: string): Promise<void> {
-  const { data: existing } = await supabase
-    .from('global_rules')
-    .select('id')
-    .maybeSingle();
+export async function updateGlobalRules(
+  rules: Partial<MatchRules>,
+  _updatedBy: string,
+  adminPasscode: string
+): Promise<void> {
+  const pass = adminPasscode.trim();
+  if (!pass) {
+    throw new Error('Dashboard passcode is required to update global rules.');
+  }
 
-  if (existing) {
-    const { error } = await supabase
-      .from('global_rules')
-      .update({ ...rules, updated_by: updatedBy, updated_at: new Date().toISOString() })
-      .eq('id', existing.id);
+  const { data, error } = await supabase.rpc('update_global_rules_as_admin', {
+    p_passcode: pass,
+    p_rules: rules as Record<string, unknown>,
+  });
 
-    if (error) throw new Error(`Failed to update global rules: ${error.message}`);
-  } else {
-    const { error } = await supabase
-      .from('global_rules')
-      .insert({ ...rules, updated_by: updatedBy });
+  if (error) {
+    throw new Error(`Failed to update global rules: ${error.message}`);
+  }
 
-    if (error) throw new Error(`Failed to create global rules: ${error.message}`);
+  const row = data as { ok?: boolean; error?: string } | null;
+  if (!row?.ok) {
+    throw new Error(row?.error || 'Failed to update global rules.');
   }
 }
 

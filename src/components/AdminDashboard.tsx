@@ -22,6 +22,8 @@ interface AdminMatchRow {
 
 export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  /** In-memory only: used for RPCs that require dashboard passcode (save rules, delete match). */
+  const [adminSessionSecret, setAdminSessionSecret] = useState('');
   const [passcode, setPasscode] = useState('');
   const [authError, setAuthError] = useState('');
   const [rules, setRules] = useState<MatchRules | null>(null);
@@ -56,6 +58,11 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
     }
   };
 
+  const closeDashboard = useCallback(() => {
+    setAdminSessionSecret('');
+    onClose();
+  }, [onClose]);
+
   const handleAuth = async () => {
     if (!passcode.trim()) {
       setAuthError('Please enter your dashboard admin passcode');
@@ -68,6 +75,7 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
     try {
       const isValid = await validateAdminAccess(passcode);
       if (isValid) {
+        setAdminSessionSecret(passcode.trim());
         setIsAuthenticated(true);
       } else {
         setAuthError('Invalid dashboard passcode');
@@ -85,7 +93,7 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
     setSaveStatus('saving');
 
     try {
-      await updateGlobalRules(rules, 'global_admin');
+      await updateGlobalRules(rules, 'global_admin', adminSessionSecret);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
@@ -147,7 +155,7 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
     if (!deleteTarget || deleteConfirmText.trim() !== deleteTarget.match_id) return;
     setDeleteBusy(true);
     setDeleteModalError(null);
-    const result = await deleteMatch(deleteTarget.match_id);
+    const result = await deleteMatch(deleteTarget.match_id, adminSessionSecret);
     setDeleteBusy(false);
     if (!result.ok) {
       setDeleteModalError(result.message);
@@ -173,6 +181,7 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
       return;
     }
     setDashPwFeedback({ type: 'ok', text: 'Dashboard password updated.' });
+    setAdminSessionSecret(dashPwNew.trim());
     setDashPwCurrent('');
     setDashPwNew('');
     setDashPwConfirm('');
@@ -231,11 +240,12 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
     );
   }
 
-  if (!rules) {
+  if (!rules && adminSection === 'rules') {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6">
+        <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-4">
           <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
         </div>
       </div>
     );
@@ -244,12 +254,12 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full my-8">
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-lg z-10">
           <div className="flex items-center gap-3">
             <Settings className="text-gray-700" size={24} />
             <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={closeDashboard} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
@@ -653,7 +663,7 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
                 <button
                   onClick={() => {
                     onCreateMatch();
-                    onClose();
+                    closeDashboard();
                   }}
                   className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
                 >

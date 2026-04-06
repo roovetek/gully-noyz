@@ -7,10 +7,10 @@
  *
  * Env (from shell or .env.local in repo root):
  *   SUPABASE_URL or VITE_SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY (recommended) or VITE_SUPABASE_ANON_KEY
+ *   SUPABASE_SERVICE_ROLE_KEY (required for deletes after security migrations)
  *
- * Service role bypasses RLS and is appropriate for one-off admin scripts.
- * Do not commit the service role key or expose it in client code.
+ * The anon key cannot delete production matches or storage objects; use the service role only
+ * on a secure machine. Do not commit the service role key or expose it in client code.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -55,8 +55,16 @@ if (!matchIdArg || !/^[A-Z0-9]{6}$/.test(matchIdArg)) {
 }
 
 if (!url || !key) {
-  console.error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY/VITE_SUPABASE_ANON_KEY');
+  console.error(
+    'Missing SUPABASE_URL (or VITE_SUPABASE_URL) and a key: SUPABASE_SERVICE_ROLE_KEY (recommended) or VITE_SUPABASE_ANON_KEY'
+  );
   process.exit(1);
+}
+
+if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn(
+    'Warning: using anon key; delete may fail if RLS blocks it. Set SUPABASE_SERVICE_ROLE_KEY for CLI deletes.'
+  );
 }
 
 const supabaseUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;

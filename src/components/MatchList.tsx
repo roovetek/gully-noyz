@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Users, Video, CreditCard as Edit2, Lock, Check, X } from 'lucide-react';
+import { ArrowLeft, Users, Video, CreditCard as Edit2, Lock, Check, X, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { SecretPrompt } from './SecretPrompt';
@@ -41,6 +41,7 @@ export function MatchList({ onBack }: MatchListProps) {
   const [showSecretPrompt, setShowSecretPrompt] = useState(false);
   const [pendingMatch, setPendingMatch] = useState<{ id: string; name: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<'join' | 'rename' | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchMatches();
@@ -336,7 +337,7 @@ export function MatchList({ onBack }: MatchListProps) {
         />
       )}
     <div className="min-h-screen bg-black text-white p-4">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-4">
         <button
           onClick={onBack}
           className="bg-gray-800 hover:bg-gray-700 p-2 rounded-lg transition-colors"
@@ -344,6 +345,25 @@ export function MatchList({ onBack }: MatchListProps) {
           <ArrowLeft size={24} className="text-white" />
         </button>
         <h1 className="text-3xl font-bold text-yellow-400">All Matches</h1>
+      </div>
+
+      <div className="relative mb-4">
+        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input
+          type="text"
+          placeholder="Search by name or match ID…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-500 py-3 pl-10 pr-4 rounded-lg focus:outline-none focus:border-green-400"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -360,7 +380,16 @@ export function MatchList({ onBack }: MatchListProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          {matches.map((match) => (
+          {matches
+            .filter((m) => {
+              if (!searchQuery.trim()) return true;
+              const q = searchQuery.toLowerCase();
+              return (
+                m.match_id.toLowerCase().includes(q) ||
+                (m.name || '').toLowerCase().includes(q)
+              );
+            })
+            .map((match) => (
             <div
               key={match.match_id}
               className="w-full bg-gray-900 border border-gray-800 hover:border-green-400 rounded-lg p-4 transition-all"
