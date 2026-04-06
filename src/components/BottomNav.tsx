@@ -62,7 +62,7 @@ export function BottomNav({ matchId, activeTab, onTabChange }: BottomNavProps) {
           }`}
         >
           <Info size={24} />
-          <span className="text-xs font-semibold">Info</span>
+          <span className="text-xs font-semibold">Config</span>
         </button>
 
         <button

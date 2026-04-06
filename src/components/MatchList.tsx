@@ -26,6 +26,9 @@ interface MatchInfo {
   is_completed: boolean;
 }
 
+const isWicketBall = (clip: { outcome: string; dismissal_type?: string | null }) =>
+  clip.outcome === 'wicket' || clip.dismissal_type != null;
+
 interface MatchListProps {
   onBack: () => void;
 }
@@ -137,10 +140,7 @@ export function MatchList({ onBack }: MatchListProps) {
           return sum + (isNaN(runs) ? 0 : runs);
         }, 0);
 
-        const totalWickets = clips.filter(c =>
-          c.outcome === 'wicket' ||
-          ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket', 'hitballtwice', 'obstructing', 'timedout', 'handledball'].includes(c.outcome)
-        ).length;
+        const totalWickets = clips.filter(isWicketBall).length;
 
         const uniqueOvers = new Set(clips.map(c => c.over_number));
         const maxOver = Math.max(...Array.from(uniqueOvers));

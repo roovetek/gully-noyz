@@ -51,16 +51,16 @@ export function Record() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black text-white pt-16 pb-20">
-      <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between">
+    <div className="relative bg-black text-white h-full min-h-[calc(100vh-10rem)]">
+      <div className="absolute top-2 left-4 right-4 z-20 flex items-center justify-between gap-2">
         <button
           onClick={handleHome}
-          className="bg-black/70 backdrop-blur p-2 rounded-lg border border-green-400 hover:bg-green-400/20 transition-colors"
+          className="bg-black/70 backdrop-blur p-2 rounded-lg border border-green-400 hover:bg-green-400/20 transition-colors flex-shrink-0"
         >
           <Home size={24} className="text-green-400" />
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {isEditing ? (
             <div className="flex items-center gap-2 bg-black/70 backdrop-blur px-3 py-2 rounded-lg border border-yellow-400">
               <input
@@ -87,10 +87,10 @@ export function Record() {
               </button>
             </div>
           ) : (
-            <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-yellow-400 flex items-center gap-2">
-              <div>
+            <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-yellow-400 flex items-center gap-2 min-w-0">
+              <div className="min-w-0">
                 {matchName && (
-                  <div className="text-white font-bold text-sm">{matchName}</div>
+                  <div className="text-white font-bold text-sm truncate max-w-[180px]">{matchName}</div>
                 )}
                 <div className="text-xs">
                   <span className="text-gray-400">ID: </span>
@@ -99,7 +99,7 @@ export function Record() {
               </div>
               <button
                 onClick={() => setIsEditing(true)}
-                className="p-1 hover:bg-gray-700 rounded"
+                className="p-1 hover:bg-gray-700 rounded flex-shrink-0"
               >
                 <Edit2 size={14} className="text-gray-400" />
               </button>
@@ -108,7 +108,7 @@ export function Record() {
         </div>
       </div>
 
-      <div className="h-full">
+      <div className="h-full pt-2">
         <VideoCapture />
       </div>
     </div>

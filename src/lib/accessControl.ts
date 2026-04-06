@@ -1,5 +1,4 @@
 import { executeTrackedAction, supabase } from './supabase';
-import { hashSecret } from './security';
 import { MatchAccessRole } from './types';
 import { validateGlobalAdminPasscode } from './globalAdmin';
 
@@ -28,27 +27,30 @@ export async function createMatchAccess(
   umpireCode: string,
   scorerCode: string
 ): Promise<void> {
-  const roles = [
-    { match_id: matchId, role: 'umpire' as const, passcode_hash: await hashSecret(umpireCode) },
-    { match_id: matchId, role: 'scorer' as const, passcode_hash: await hashSecret(scorerCode) },
+  const requestPayload = [
+    { match_id: matchId, role: 'umpire' as const },
+    { match_id: matchId, role: 'scorer' as const },
   ];
 
-  const requestPayload = roles.map(({ match_id, role }) => ({ match_id, role }));
-
-  const { error } = await executeTrackedAction({
+  const { data, error } = await executeTrackedAction({
     tableName: 'access_roles',
     action: 'insert',
     matchId,
     payload: requestPayload,
     execute: async (_traceId) =>
-      supabase
-        .from('access_roles')
-        .insert(roles)
-        .select('id, match_id, role, created_at'),
+      supabase.rpc('create_match_access_roles', {
+        p_match_id: matchId,
+        p_umpire_passcode: umpireCode,
+        p_scorer_passcode: scorerCode,
+      }),
   });
 
   if (error) {
     throw new Error(`Failed to create match access: ${error.message}`);
+  }
+  const result = data as { ok?: boolean; error?: string } | null;
+  if (!result?.ok) {
+    throw new Error(result?.error || 'Failed to create match access.');
   }
 }
 

@@ -7,6 +7,20 @@ import { logger } from '../lib/logger';
 
 import { validateRole } from '../lib/accessControl';
 
+const DISMISSAL_TYPES = [
+  'unknown',
+  'bowled',
+  'caught',
+  'lbw',
+  'runout',
+  'stumped',
+  'hitwicket',
+  'hitballtwice',
+  'obstructing',
+  'timedout',
+  'handledball',
+] as const;
+
 interface RecordingData {
   blob: Blob;
   duration: number;
@@ -77,9 +91,10 @@ export function VideoCapture() {
   const [umpireAuthError, setUmpireAuthError] = useState('');
   const [umpireAuthenticated, setUmpireAuthenticated] = useState(false);
   const [editableOverBalls, setEditableOverBalls] = useState<
-    { id: string; ball_number: number; outcome: string }[]
+    { id: string; ball_number: number; outcome: string; dismissal_type: string | null }[]
   >([]);
   const [editBallOutcome, setEditBallOutcome] = useState<Record<number, string>>({});
+  const [editBallDismissalType, setEditBallDismissalType] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!matchId) return;
@@ -108,7 +123,7 @@ export function VideoCapture() {
       const testDataFilter = getTestDataFilter();
       let clipsQuery = supabase
         .from('clips')
-        .select('outcome, over_number, ball_number, innings_number')
+        .select('outcome, dismissal_type, over_number, ball_number, innings_number')
         .eq('match_id', matchId)
         .eq('innings_number', inningsForQuery);
 
@@ -128,7 +143,7 @@ export function VideoCapture() {
           return total + (isNaN(runValue) ? 0 : runValue);
         }, 0);
 
-        const wickets = clips.filter(clip => clip.outcome === 'wicket').length;
+        const wickets = clips.filter(clip => clip.dismissal_type != null || clip.outcome === 'wicket').length;
 
         const uniqueOvers = new Set(clips.map(clip => clip.over_number));
         const maxOver = Math.max(...Array.from(uniqueOvers));
@@ -346,7 +361,9 @@ export function VideoCapture() {
     setError(null);
 
     try {
-      const outcomeValue = selectedOutcome === 'wicket' && selectedOutType ? selectedOutType.toLowerCase() : selectedOutcome.toLowerCase();
+      const outcomeValue = selectedOutcome.toLowerCase();
+      const dismissalTypeValue =
+        selectedOutcome === 'wicket' && selectedOutType ? selectedOutType.toLowerCase() : null;
 
       let videoUrl: string | null = null;
 
@@ -379,6 +396,7 @@ export function VideoCapture() {
           over_number: overNumber,
           ball_number: confirmBallNumber,
           outcome: outcomeValue,
+          dismissal_type: dismissalTypeValue,
           video_url: videoUrl,
           duration: recordingData?.duration ?? 0,
         },
@@ -390,6 +408,7 @@ export function VideoCapture() {
             over_number: overNumber,
             ball_number: confirmBallNumber,
             outcome: outcomeValue,
+            dismissal_type: dismissalTypeValue,
             video_url: videoUrl,
             duration: recordingData?.duration ?? 0,
           }),
@@ -473,27 +492,41 @@ export function VideoCapture() {
     if (overCompleteData) {
       const { data } = await supabase
         .from('clips')
-        .select('id, ball_number, outcome')
+        .select('id, ball_number, outcome, dismissal_type')
         .eq('match_id', matchId)
         .eq('innings_number', currentInnings)
         .eq('over_number', overCompleteData.completedOver)
         .order('ball_number');
       setEditableOverBalls(data || []);
       setEditBallOutcome({});
+      setEditBallDismissalType({});
     }
   };
 
   const handleSaveOverEdits = async () => {
-    const entries = Object.entries(editBallOutcome);
-    for (const [ballNum, newOutcome] of entries) {
-      const ball = editableOverBalls.find(b => b.ball_number === parseInt(ballNum));
-      if (ball && ball.id) {
-        await supabase.from('clips').update({ outcome: newOutcome }).eq('id', ball.id);
+    for (const ball of editableOverBalls) {
+      const selectedOutcome = editBallOutcome[ball.ball_number] ?? ball.outcome;
+      const selectedDismissal = editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? '';
+      const normalizedOutcome = selectedOutcome.toLowerCase();
+      const normalizedDismissal =
+        normalizedOutcome === 'wicket' ? (selectedDismissal ? selectedDismissal.toLowerCase() : null) : null;
+
+      if (normalizedOutcome === 'wicket' && !normalizedDismissal) {
+        setError(`Select dismissal type for ball ${ball.ball_number}`);
+        return;
+      }
+
+      if (ball.id) {
+        await supabase
+          .from('clips')
+          .update({ outcome: normalizedOutcome, dismissal_type: normalizedDismissal })
+          .eq('id', ball.id);
       }
     }
     setUmpireAuthenticated(false);
     setEditableOverBalls([]);
     setEditBallOutcome({});
+    setEditBallDismissalType({});
   };
 
   const handleCancel = () => {
@@ -703,20 +736,44 @@ export function VideoCapture() {
             {editableOverBalls.map((ball) => (
               <div key={ball.ball_number} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
                 <span className="text-gray-400 text-sm w-16 flex-shrink-0">Ball {ball.ball_number}</span>
-                <select
-                  value={editBallOutcome[ball.ball_number] ?? ball.outcome}
-                  onChange={(e) => setEditBallOutcome(prev => ({ ...prev, [ball.ball_number]: e.target.value }))}
-                  className="flex-1 bg-gray-700 border border-gray-600 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-yellow-400"
-                >
-                  <option value="dot">Dot</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="6">6</option>
-                  <option value="wicket">Wicket</option>
-                  <option value="other">Other</option>
-                </select>
+                <div className="flex-1 space-y-2">
+                  <select
+                    value={editBallOutcome[ball.ball_number] ?? ball.outcome}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEditBallOutcome(prev => ({ ...prev, [ball.ball_number]: value }));
+                      if (value !== 'wicket') {
+                        setEditBallDismissalType(prev => ({ ...prev, [ball.ball_number]: '' }));
+                      }
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-yellow-400"
+                  >
+                    <option value="dot">Dot</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="6">6</option>
+                    <option value="wicket">Wicket</option>
+                    <option value="other">Other</option>
+                  </select>
+                  {(editBallOutcome[ball.ball_number] ?? ball.outcome) === 'wicket' && (
+                    <select
+                      value={editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? ''}
+                      onChange={(e) =>
+                        setEditBallDismissalType(prev => ({ ...prev, [ball.ball_number]: e.target.value }))
+                      }
+                      className="w-full bg-gray-700 border border-gray-600 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-yellow-400"
+                    >
+                      <option value="">Select dismissal type</option>
+                      {DISMISSAL_TYPES.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
             ))}
           </div>

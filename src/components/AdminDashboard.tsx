@@ -254,12 +254,12 @@ export function AdminDashboard({ onClose, onCreateMatch }: AdminDashboardProps) 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full my-8">
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-lg z-10">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-lg z-10 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
             <Settings className="text-gray-700" size={24} />
-            <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
+            <h2 className="text-xl font-semibold text-gray-900 truncate">Dashboard</h2>
           </div>
-          <button onClick={closeDashboard} className="text-gray-400 hover:text-gray-600">
+          <button onClick={closeDashboard} className="text-gray-400 hover:text-gray-600 flex-shrink-0 p-1 ml-1">
             <X size={24} />
           </button>
         </div>

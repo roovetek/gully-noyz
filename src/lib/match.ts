@@ -96,7 +96,7 @@ export function getNextBall(
 }
 
 export function calculateMatchStats(
-  clips: Array<{ outcome: string }>,
+  clips: Array<{ outcome: string; dismissal_type?: string | null }>,
   ballsPerOver: number
 ): MatchStats {
   const runs = clips.reduce((total, clip) => {
@@ -104,7 +104,9 @@ export function calculateMatchStats(
     return total + (isNaN(runValue) ? 0 : runValue);
   }, 0);
 
-  const wickets = clips.filter(clip => clip.outcome === 'wicket').length;
+  const wickets = clips.filter(
+    (clip) => clip.outcome === 'wicket' || clip.dismissal_type != null
+  ).length;
 
   const currentOvers = calculateOversDisplay(clips.length, ballsPerOver);
 

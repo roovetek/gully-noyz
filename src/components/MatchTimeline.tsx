@@ -142,7 +142,7 @@ export function MatchTimeline() {
     }
   };
 
-  const handlePlayClip = (clipId: string, videoUrl: string) => {
+  const handlePlayClip = (clipId: string) => {
     setPlayingClipId(clipId);
     const videoElement = document.getElementById(`video-${clipId}`) as HTMLVideoElement;
     if (videoElement) {
@@ -150,17 +150,37 @@ export function MatchTimeline() {
     }
   };
 
-  const getOutcomeColor = (outcome: string) => {
+  const isWicketBall = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) =>
+    clip.outcome === 'wicket' || clip.dismissal_type !== null;
+
+  const formatOutcome = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) => {
+    if (clip.outcome === 'wicket') {
+      if (clip.dismissal_type) {
+        const label =
+          clip.dismissal_type === 'unknown'
+            ? 'Unknown'
+            : clip.dismissal_type.charAt(0).toUpperCase() + clip.dismissal_type.slice(1);
+        return `Wicket (${label})`;
+      }
+      return 'Wicket';
+    }
+    return clip.outcome === 'dot' ? 'Dot' : clip.outcome;
+  };
+
+  const getOutcomeColor = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) => {
+    const outcome = clip.outcome;
     switch (outcome) {
       case '6':
         return 'text-green-400 bg-green-500/20 border-green-500';
       case '4':
         return 'text-blue-400 bg-blue-500/20 border-blue-500';
-      case 'Wicket':
+      case 'wicket':
         return 'text-red-400 bg-red-500/20 border-red-500';
       case 'Dot':
+      case 'dot':
         return 'text-gray-400 bg-gray-500/20 border-gray-500';
       default:
+        if (isWicketBall(clip)) return 'text-red-400 bg-red-500/20 border-red-500';
         return 'text-yellow-400 bg-yellow-500/20 border-yellow-500';
     }
   };
@@ -202,7 +222,7 @@ export function MatchTimeline() {
   };
 
   const getTotalWickets = () => {
-    return filteredClips.filter(clip => clip.outcome === 'wicket').length;
+    return filteredClips.filter(isWicketBall).length;
   };
 
   const getTotalBalls = () => {
@@ -318,7 +338,7 @@ export function MatchTimeline() {
               <div className="relative">
                 <video
                   id={`video-${clip.id}`}
-                  src={clip.video_url}
+                  src={clip.video_url || undefined}
                   className="w-full max-h-60 bg-black object-contain"
                   controls
                   playsInline
@@ -328,7 +348,7 @@ export function MatchTimeline() {
                 />
                 {playingClipId !== clip.id && (
                   <button
-                    onClick={() => handlePlayClip(clip.id, clip.video_url)}
+                    onClick={() => handlePlayClip(clip.id)}
                     className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
                   >
                     <div className="w-16 h-16 bg-green-500/90 rounded-full flex items-center justify-center">
@@ -353,11 +373,9 @@ export function MatchTimeline() {
                     </div>
 
                     <div
-                      className={`border rounded px-3 py-1 font-bold text-sm ${getOutcomeColor(
-                        clip.outcome
-                      )}`}
+                      className={`border rounded px-3 py-1 font-bold text-sm ${getOutcomeColor(clip)}`}
                     >
-                      {clip.outcome}
+                      {formatOutcome(clip)}
                     </div>
                   </div>
 

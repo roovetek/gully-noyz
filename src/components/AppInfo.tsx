@@ -20,7 +20,7 @@ export function GullyRulz() {
         <div className="flex items-center gap-3">
           <Info size={24} className="text-blue-400" />
           <div>
-            <h1 className="text-2xl font-bold text-white">GullyRulz</h1>
+            <h1 className="text-2xl font-bold text-white">Gully Rulz</h1>
             <p className="text-sm text-gray-400">Global rules for this cricket version.</p>
           </div>
         </div>

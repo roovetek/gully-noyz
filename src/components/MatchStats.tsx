@@ -19,6 +19,15 @@ interface OverData {
   wickets: number;
 }
 
+const formatDismissalLabel = (dismissalType: string) =>
+  dismissalType === 'unknown'
+    ? 'Unknown'
+    :
+  dismissalType.charAt(0).toUpperCase() + dismissalType.slice(1);
+
+const isWicketBall = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) =>
+  clip.outcome === 'wicket' || clip.dismissal_type !== null;
+
 export function MatchStats() {
   const { matchId, matchName } = useMatch();
   const [innings1Summary, setInnings1Summary] = useState<InningsSummary | null>(null);
@@ -87,8 +96,7 @@ export function MatchStats() {
       return sum + (isNaN(runs) ? 0 : runs);
     }, 0);
 
-    const totalWickets = clips.filter(c => c.outcome === 'wicket' ||
-      ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket', 'hitballtwice', 'obstructing', 'timedout', 'handledball'].includes(c.outcome)).length;
+    const totalWickets = clips.filter(isWicketBall).length;
 
     const uniqueOvers = new Set(clips.map(c => c.over_number));
     const maxOver = Math.max(...Array.from(uniqueOvers));
@@ -123,8 +131,7 @@ export function MatchStats() {
           return sum + (isNaN(r) ? 0 : r);
         }, 0);
 
-        const wickets = balls.filter(b => b.outcome === 'wicket' ||
-          ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket', 'hitballtwice', 'obstructing', 'timedout', 'handledball'].includes(b.outcome)).length;
+        const wickets = balls.filter(isWicketBall).length;
 
         return { overNumber, balls, runs, wickets };
       })
@@ -146,19 +153,20 @@ export function MatchStats() {
     setExpandedOvers(newExpanded);
   };
 
-  const formatOutcome = (outcome: string) => {
+  const formatOutcome = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) => {
+    const outcome = clip.outcome;
     if (outcome === 'dot') return 'Dot Ball';
-    if (outcome === 'wicket') return 'Wicket';
-    if (['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket', 'hitballtwice', 'obstructing', 'timedout', 'handledball'].includes(outcome)) {
-      return `Out - ${outcome.charAt(0).toUpperCase() + outcome.slice(1)}`;
+    if (outcome === 'wicket') {
+      return clip.dismissal_type ? `Wicket - ${formatDismissalLabel(clip.dismissal_type)}` : 'Wicket';
     }
     return `${outcome} Run${outcome === '1' ? '' : 's'}`;
   };
 
-  const getOutcomeColor = (outcome: string) => {
+  const getOutcomeColor = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) => {
+    const outcome = clip.outcome;
     if (outcome === '6') return 'text-green-400 bg-green-500/20 border-green-500';
     if (outcome === '4') return 'text-blue-400 bg-blue-500/20 border-blue-500';
-    if (outcome === 'wicket' || ['bowled', 'caught', 'lbw', 'runout', 'stumped', 'hitwicket', 'hitballtwice', 'obstructing', 'timedout', 'handledball'].includes(outcome)) {
+    if (isWicketBall(clip)) {
       return 'text-red-400 bg-red-500/20 border-red-500';
     }
     if (outcome === 'dot') return 'text-gray-400 bg-gray-500/20 border-gray-500';
@@ -290,8 +298,8 @@ export function MatchStats() {
                                           <div className="bg-green-500/20 border border-green-400 rounded px-2 py-1">
                                             <span className="text-green-400 text-sm font-bold">Ball {ball.ball_number}</span>
                                           </div>
-                                          <div className={`border rounded px-3 py-1 text-sm font-bold ${getOutcomeColor(ball.outcome)}`}>
-                                            {formatOutcome(ball.outcome)}
+                                          <div className={`border rounded px-3 py-1 text-sm font-bold ${getOutcomeColor(ball)}`}>
+                                            {formatOutcome(ball)}
                                           </div>
                                         </div>
                                         <div className="text-gray-500 text-xs">

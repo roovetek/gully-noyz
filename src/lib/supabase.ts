@@ -202,7 +202,8 @@ export interface Clip {
   over_number: number;
   ball_number: number;
   outcome: string;
-  video_url: string;
+  dismissal_type: string | null;
+  video_url: string | null;
   duration: number;
   created_at: string;
 }
