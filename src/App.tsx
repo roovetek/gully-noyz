@@ -28,10 +28,15 @@ function AppContent() {
     setActiveTab('gullyRulz');
   };
 
+  const handleGoHome = () => {
+    setActiveTab('record');
+    setMatchId(null);
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col">
       <Header
-        onHome={() => setMatchId(null)}
+        onHome={handleGoHome}
         onOpenAdmin={() => setShowAdmin(true)}
         onOpenGullyRulz={handleOpenGullyRulz}
       />
@@ -50,7 +55,7 @@ function AppContent() {
         )}
       </div>
       <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
-      <Footer />
+      {!matchId && activeTab !== 'gullyRulz' && <Footer />}
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
     </div>
   );

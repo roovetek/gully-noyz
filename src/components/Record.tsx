@@ -51,7 +51,7 @@ export function Record() {
   };
 
   return (
-    <div className="relative bg-black text-white h-full min-h-[calc(100vh-10rem)]">
+    <div className="fixed inset-0 bg-black text-white pt-16 pb-20">
       <div className="absolute top-2 left-4 right-4 z-20 flex items-center justify-between gap-2">
         <button
           onClick={handleHome}
@@ -108,7 +108,7 @@ export function Record() {
         </div>
       </div>
 
-      <div className="h-full pt-2">
+      <div className="h-full">
         <VideoCapture />
       </div>
     </div>

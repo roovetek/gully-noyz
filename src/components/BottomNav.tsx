@@ -1,4 +1,4 @@
-import { Video, Clock, BarChart3, Info } from 'lucide-react';
+import { Video, Clock, BarChart3, Settings } from 'lucide-react';
 
 type Tab = 'record' | 'timeline' | 'stats' | 'info' | 'gullyRulz';
 
@@ -61,7 +61,7 @@ export function BottomNav({ matchId, activeTab, onTabChange }: BottomNavProps) {
               : 'text-gray-500 hover:text-gray-300'
           }`}
         >
-          <Info size={24} />
+          <Settings size={24} />
           <span className="text-xs font-semibold">Config</span>
         </button>
 

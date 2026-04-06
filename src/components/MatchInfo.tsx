@@ -3,16 +3,24 @@ import { useMatch } from '../context/MatchContext';
 import { useEffect, useState } from 'react';
 import { getEffectiveRules } from '../lib/rulesEngine';
 import { MatchRules } from '../lib/types';
+import { supabase } from '../lib/supabase';
 
 export function MatchInfo() {
   const { matchId, matchName } = useMatch();
   const [rules, setRules] = useState<MatchRules | null>(null);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchMatchRules() {
       if (matchId) {
         const effectiveRules = await getEffectiveRules(matchId);
         setRules(effectiveRules);
+        const { data } = await supabase
+          .from('matches')
+          .select('created_at')
+          .eq('match_id', matchId)
+          .maybeSingle();
+        setCreatedAt(data?.created_at ?? null);
       }
     }
     fetchMatchRules();
@@ -37,6 +45,11 @@ export function MatchInfo() {
           <div className="mt-2 text-sm text-gray-400">
             Match ID: <span className="font-mono text-yellow-400">{matchId}</span>
           </div>
+          {createdAt && (
+            <div className="mt-1 text-sm text-gray-400">
+              Match Date: <span className="text-white">{new Date(createdAt).toLocaleString()}</span>
+            </div>
+          )}
         </div>
 
         {rules ? (

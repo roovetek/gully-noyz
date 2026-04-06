@@ -149,13 +149,13 @@ export async function executeTrackedAction<T>({
   }
 
   try {
-    await supabase.from('audit_logs').insert({
-      trace_id: traceId,
-      match_id: matchId,
-      endpoint_name: `${tableName}.${action}`,
-      request_payload: sanitizeAuditPayload(payload),
-      response_body: { status: 'pending' },
-      status_code: 'pending',
+    await supabase.rpc('audit_log_create', {
+      p_trace_id: traceId,
+      p_match_id: matchId,
+      p_endpoint_name: `${tableName}.${action}`,
+      p_request_payload: sanitizeAuditPayload(payload),
+      p_response_body: { status: 'pending' },
+      p_status_code: 'pending',
     });
   } catch (auditInsertError) {
     console.error('[AUDIT]: Failed to write pending audit log', auditInsertError);
@@ -166,13 +166,11 @@ export async function executeTrackedAction<T>({
     const statusCode = getResultStatusCode(result);
 
     try {
-      await supabase
-        .from('audit_logs')
-        .update({
-          response_body: sanitizeAuditPayload(result),
-          status_code: statusCode,
-        })
-        .eq('trace_id', traceId);
+      await supabase.rpc('audit_log_update', {
+        p_trace_id: traceId,
+        p_response_body: sanitizeAuditPayload(result),
+        p_status_code: statusCode,
+      });
     } catch (auditUpdateError) {
       console.error('[AUDIT]: Failed to update audit log', auditUpdateError);
     }
@@ -180,13 +178,11 @@ export async function executeTrackedAction<T>({
     return result;
   } catch (error) {
     try {
-      await supabase
-        .from('audit_logs')
-        .update({
-          response_body: toSerializableError(error),
-          status_code: 'error',
-        })
-        .eq('trace_id', traceId);
+      await supabase.rpc('audit_log_update', {
+        p_trace_id: traceId,
+        p_response_body: toSerializableError(error),
+        p_status_code: 'error',
+      });
     } catch (auditUpdateError) {
       console.error('[AUDIT]: Failed to update audit log after error', auditUpdateError);
     }

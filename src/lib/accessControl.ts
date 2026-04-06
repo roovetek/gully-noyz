@@ -25,8 +25,12 @@ export async function validateRole(
 export async function createMatchAccess(
   matchId: string,
   umpireCode: string,
-  scorerCode: string
+  scorerCode?: string
 ): Promise<void> {
+  const scorerPasscode = (scorerCode && scorerCode.trim().length >= 4)
+    ? scorerCode
+    : `scorer-${Math.random().toString(36).slice(2, 10)}`;
+
   const requestPayload = [
     { match_id: matchId, role: 'umpire' as const },
     { match_id: matchId, role: 'scorer' as const },
@@ -41,7 +45,7 @@ export async function createMatchAccess(
       supabase.rpc('create_match_access_roles', {
         p_match_id: matchId,
         p_umpire_passcode: umpireCode,
-        p_scorer_passcode: scorerCode,
+        p_scorer_passcode: scorerPasscode,
       }),
   });
 

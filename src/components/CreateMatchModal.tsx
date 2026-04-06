@@ -19,7 +19,6 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
   const [matchName, setMatchName] = useState('');
   const [matchSecret, setMatchSecret] = useState('');
   const [umpirePasscode, setUmpirePasscode] = useState('');
-  const [scorerPasscode, setScorerPasscode] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [customizeRules, setCustomizeRules] = useState(false);
   const [rules, setRules] = useState<MatchRules | null>(null);
@@ -52,11 +51,6 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
 
     if (!umpirePasscode.trim() || umpirePasscode.length < 4) {
       setError('Umpire passcode must be at least 4 characters');
-      return;
-    }
-
-    if (!scorerPasscode.trim() || scorerPasscode.length < 4) {
-      setError('Scorer passcode must be at least 4 characters');
       return;
     }
 
@@ -106,7 +100,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         throw insertError;
       }
 
-      await createMatchAccess(newMatchId, umpirePasscode.trim(), scorerPasscode.trim());
+      await createMatchAccess(newMatchId, umpirePasscode.trim());
 
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
     } catch (err) {
@@ -247,22 +241,6 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
             />
             <p className="text-xs text-gray-500 mt-1">
               Match authority (not the dashboard admin). Used to verify umpire actions during the match.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Scorer passcode <span className="text-gray-500 text-xs">(min 4 characters)</span>
-            </label>
-            <input
-              type="password"
-              value={scorerPasscode}
-              onChange={(e) => setScorerPasscode(e.target.value)}
-              placeholder="Set a passcode for the scorer"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Used when joining the match as scorer
             </p>
           </div>
 
