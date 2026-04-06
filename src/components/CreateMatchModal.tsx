@@ -3,8 +3,8 @@ import { X, Lock, LockKeyhole, Settings } from 'lucide-react';
 import { executeTrackedAction, supabase } from '../lib/supabase';
 import { hashSecret } from '../lib/security';
 import { generateMatchId } from '../lib/match';
-import { validateMatchName, validateMatchSecret, validateOversConfig } from '../lib/validation';
-import { CRICKET_CONSTANTS, ERROR_MESSAGES } from '../lib/constants';
+import { validateMatchName, validateMatchSecret } from '../lib/validation';
+import { ERROR_MESSAGES } from '../lib/constants';
 import { getGlobalRules } from '../lib/rulesEngine';
 import { createMatchAccess } from '../lib/accessControl';
 import { MatchRules } from '../lib/types';
@@ -60,6 +60,11 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
       return;
     }
 
+    if (!rules) {
+      setError('Rules not loaded. Please refresh and try again.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -91,7 +96,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         action: 'insert',
         payload: matchData,
         matchId: newMatchId,
-        execute: async (traceId) => {
+        execute: async (_traceId) => {
           return await supabase.from('matches').insert(matchData);
         },
       });
