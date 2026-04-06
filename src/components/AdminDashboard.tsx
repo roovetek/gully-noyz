@@ -28,7 +28,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [rules, setRules] = useState<MatchRules | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const [adminSection, setAdminSection] = useState<'rules' | 'matches' | 'deployment'>('rules');
+  const [adminSection, setAdminSection] = useState<'rules' | 'matches' | 'deployment' | 'password'>('rules');
   const [adminMatches, setAdminMatches] = useState<AdminMatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesListError, setMatchesListError] = useState<string | null>(null);
@@ -239,7 +239,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
     );
   }
 
-  if (!rules && adminSection === 'rules') {
+  if (!rules && isAuthenticated && adminSection === 'rules') {
     return (
       <div className="min-h-screen bg-black text-white p-4 pb-24">
         <div className="mx-auto bg-white rounded-lg p-6 flex flex-col items-center gap-4 max-w-md mt-4">
@@ -307,6 +307,20 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                 Deployment
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => setAdminSection('password')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                adminSection === 'password'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Lock size={16} />
+                Admin password
+              </span>
+            </button>
           </div>
 
           {deleteSuccessMessage && (
@@ -351,20 +365,15 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-gray-200 rounded-lg p-4 space-y-2">
-                    <h4 className="text-sm font-semibold text-gray-700">Build Info</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div className="flex justify-between"><span>Version</span><span className="font-mono font-medium text-gray-900">{deploymentInfo.version}</span></div>
-                      <div className="flex justify-between"><span>Environment</span><span className="font-mono font-medium text-gray-900">{deploymentInfo.environment}</span></div>
-                      <div className="flex justify-between"><span>Build date</span><span className="font-mono font-medium text-gray-900 text-xs">{new Date(deploymentInfo.buildDate).toLocaleString()}</span></div>
-                    </div>
-                  </div>
-                  <div className="border border-gray-200 rounded-lg p-4 space-y-2">
-                    <h4 className="text-sm font-semibold text-gray-700">Supabase</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div className="flex justify-between"><span>URL</span><span className="font-mono font-medium text-gray-900 text-xs truncate max-w-[140px]">{deploymentInfo.supabaseUrl.split('.')[0]}</span></div>
-                    </div>
+                <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-700">Build Info</h4>
+                  <p className="text-xs text-gray-500">
+                    Full build id (package version + commit or timestamp). Use this to confirm the latest deploy.
+                  </p>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div className="flex justify-between gap-2"><span>Build id</span><span className="font-mono font-medium text-gray-900 text-right break-all">{deploymentInfo.version}</span></div>
+                    <div className="flex justify-between"><span>Environment</span><span className="font-mono font-medium text-gray-900">{deploymentInfo.environment}</span></div>
+                    <div className="flex justify-between"><span>Build date</span><span className="font-mono font-medium text-gray-900 text-xs">{new Date(deploymentInfo.buildDate).toLocaleString()}</span></div>
                   </div>
                 </div>
 
@@ -587,16 +596,16 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
             </div>
           )}
 
-          <div className="border-t border-gray-200 pt-6">
+          {adminSection === 'password' && (
             <div className="border border-gray-200 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2 text-gray-900 font-semibold">
                 <Lock size={18} className="text-gray-600" />
                 Change dashboard password
               </div>
               <p className="text-xs text-gray-500">
-                This only affects dashboard admin access.
+                This only affects dashboard admin access (this screen).
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-3 max-w-md">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Current</label>
                   <input
@@ -660,7 +669,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                 {dashPwSaving ? 'Updating…' : 'Update dashboard password'}
               </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

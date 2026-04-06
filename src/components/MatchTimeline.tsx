@@ -3,6 +3,7 @@ import { Play } from 'lucide-react';
 import { supabase, Clip } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { getTestDataFilter } from '../lib/testDataFilter';
+import { calculateInningsOversDisplay } from '../lib/match';
 
 export function MatchTimeline() {
   const { matchId } = useMatch();
@@ -14,6 +15,7 @@ export function MatchTimeline() {
   const [availableOvers, setAvailableOvers] = useState<number[]>([]);
   const [availableBalls, setAvailableBalls] = useState<number[]>([]);
   const [selectedInnings, setSelectedInnings] = useState<number>(1);
+  const [ballsPerOver, setBallsPerOver] = useState(6);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,6 +74,16 @@ export function MatchTimeline() {
     if (!matchId) return;
 
     setLoading(true);
+
+    const { data: matchRow } = await supabase
+      .from('matches')
+      .select('balls_per_over')
+      .eq('match_id', matchId)
+      .maybeSingle();
+    if (matchRow?.balls_per_over != null && matchRow.balls_per_over > 0) {
+      setBallsPerOver(matchRow.balls_per_over);
+    }
+
     const testDataFilter = getTestDataFilter();
     let clipsQuery = supabase
       .from('clips')
@@ -229,19 +241,7 @@ export function MatchTimeline() {
     return filteredClips.length;
   };
 
-  const getTotalOvers = () => {
-    const uniqueOvers = new Set(filteredClips.map(clip => clip.over_number));
-    const completedOvers = uniqueOvers.size;
-    const ballsInCurrentOver = filteredClips.filter(clip =>
-      clip.over_number === Math.max(...Array.from(uniqueOvers))
-    ).length;
-
-    if (ballsInCurrentOver === 0) {
-      return completedOvers.toString();
-    }
-
-    return `${completedOvers - 1}.${ballsInCurrentOver}`;
-  };
+  const getTotalOvers = () => calculateInningsOversDisplay(filteredClips, ballsPerOver);
 
   return (
     <div className="min-h-screen bg-black text-white pb-20">
@@ -325,8 +325,11 @@ export function MatchTimeline() {
 
       <div ref={scrollRef} className="p-4 space-y-3">
         {filteredClips.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No clips recorded for Innings {selectedInnings}</p>
+          <div className="text-center py-12 px-4 rounded-lg border border-gray-800 bg-gray-900/50">
+            <p className="text-gray-300 font-medium mb-1">No balls in Innings {selectedInnings}</p>
+            <p className="text-gray-500 text-sm">
+              Switch innings above, or open Record and log balls for this innings.
+            </p>
           </div>
         ) : (
           filteredClips.map((clip) => (

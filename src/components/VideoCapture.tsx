@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Circle, Square, ChevronUp, Pause, Play, SkipForward } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { executeTrackedAction, supabase } from '../lib/supabase';
@@ -6,6 +6,7 @@ import { getTestDataFilter } from '../lib/testDataFilter';
 import { logger } from '../lib/logger';
 
 import { validateRole } from '../lib/accessControl';
+import { calculateInningsOversDisplay } from '../lib/match';
 
 const DISMISSAL_TYPES = [
   'unknown',
@@ -96,111 +97,111 @@ export function VideoCapture() {
   const [editBallOutcome, setEditBallOutcome] = useState<Record<number, string>>({});
   const [editBallDismissalType, setEditBallDismissalType] = useState<Record<number, string>>({});
 
+  const loadMatchAndClips = useCallback(async () => {
+    if (!matchId) return;
+
+    const { data: matchData } = await supabase
+      .from('matches')
+      .select('balls_per_over, total_overs, current_innings')
+      .eq('match_id', matchId)
+      .maybeSingle();
+
+    const bpo = matchData?.balls_per_over ?? 6;
+    const to = matchData?.total_overs ?? 20;
+    const inningsForQuery = matchData?.current_innings ?? currentInnings;
+
+    if (matchData) {
+      setBallsPerOver(bpo);
+      setTotalOvers(to);
+      setCurrentInnings(matchData.current_innings);
+    }
+
+    const testDataFilter = getTestDataFilter();
+    let clipsQuery = supabase
+      .from('clips')
+      .select('outcome, dismissal_type, over_number, ball_number, innings_number')
+      .eq('match_id', matchId)
+      .eq('innings_number', inningsForQuery);
+
+    if (testDataFilter !== undefined) {
+      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
+    }
+
+    const { data: clips } = await clipsQuery
+      .order('over_number', { ascending: false })
+      .order('ball_number', { ascending: false });
+
+    if (clips && clips.length > 0) {
+      const runs = clips.reduce((total, clip) => {
+        const runValue = parseInt(clip.outcome);
+        return total + (isNaN(runValue) ? 0 : runValue);
+      }, 0);
+
+      const wickets = clips.filter(clip => clip.dismissal_type != null || clip.outcome === 'wicket').length;
+
+      setTotalRuns(runs);
+      setTotalWickets(wickets);
+      setCurrentOvers(calculateInningsOversDisplay(clips, bpo));
+
+      const latestClip = clips[0];
+      if (latestClip.over_number >= to && latestClip.ball_number >= bpo) {
+        setInningsComplete(true);
+      } else if (latestClip.ball_number >= bpo) {
+        setOverNumber(latestClip.over_number + 1);
+        setBallNumber(1);
+      } else {
+        setOverNumber(latestClip.over_number);
+        setBallNumber(latestClip.ball_number + 1);
+      }
+    } else {
+      setOverNumber(1);
+      setBallNumber(1);
+      setTotalRuns(0);
+      setTotalWickets(0);
+      setCurrentOvers('0');
+      setInningsComplete(false);
+    }
+
+    let usedQuery = supabase
+      .from('clips')
+      .select('ball_number')
+      .eq('match_id', matchId)
+      .eq('innings_number', inningsForQuery)
+      .eq('over_number', overNumber);
+
+    if (testDataFilter !== undefined) {
+      usedQuery = usedQuery.eq('is_test_data', testDataFilter);
+    }
+
+    const { data: usedData } = await usedQuery;
+
+    if (usedData) {
+      setUsedBalls(new Set(usedData.map(clip => clip.ball_number)));
+    }
+  }, [matchId, overNumber, currentInnings]);
+
+  useEffect(() => {
+    void loadMatchAndClips();
+  }, [loadMatchAndClips]);
+
   useEffect(() => {
     if (!matchId) return;
 
-    let cancelled = false;
-
-    const load = async () => {
-      const { data: matchData } = await supabase
-        .from('matches')
-        .select('balls_per_over, total_overs, current_innings')
-        .eq('match_id', matchId)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      const bpo = matchData?.balls_per_over ?? 6;
-      const to = matchData?.total_overs ?? 20;
-      const inningsForQuery = matchData?.current_innings ?? currentInnings;
-
-      if (matchData) {
-        setBallsPerOver(bpo);
-        setTotalOvers(to);
-        setCurrentInnings(matchData.current_innings);
-      }
-
-      const testDataFilter = getTestDataFilter();
-      let clipsQuery = supabase
-        .from('clips')
-        .select('outcome, dismissal_type, over_number, ball_number, innings_number')
-        .eq('match_id', matchId)
-        .eq('innings_number', inningsForQuery);
-
-      if (testDataFilter !== undefined) {
-        clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
-      }
-
-      const { data: clips } = await clipsQuery
-        .order('over_number', { ascending: false })
-        .order('ball_number', { ascending: false });
-
-      if (cancelled) return;
-
-      if (clips && clips.length > 0) {
-        const runs = clips.reduce((total, clip) => {
-          const runValue = parseInt(clip.outcome);
-          return total + (isNaN(runValue) ? 0 : runValue);
-        }, 0);
-
-        const wickets = clips.filter(clip => clip.dismissal_type != null || clip.outcome === 'wicket').length;
-
-        const uniqueOvers = new Set(clips.map(clip => clip.over_number));
-        const maxOver = Math.max(...Array.from(uniqueOvers));
-        const ballsInCurrentOver = clips.filter(clip => clip.over_number === maxOver).length;
-
-        const completedOvers = ballsInCurrentOver === bpo ? maxOver : maxOver - 1;
-        const currentBalls = ballsInCurrentOver === bpo ? 0 : ballsInCurrentOver;
-
-        setTotalRuns(runs);
-        setTotalWickets(wickets);
-        setCurrentOvers(currentBalls === 0 ? completedOvers.toString() : `${completedOvers}.${currentBalls}`);
-
-        const latestClip = clips[0];
-        if (latestClip.over_number >= to && latestClip.ball_number >= bpo) {
-          setInningsComplete(true);
-        } else if (latestClip.ball_number >= bpo) {
-          setOverNumber(latestClip.over_number + 1);
-          setBallNumber(1);
-        } else {
-          setOverNumber(latestClip.over_number);
-          setBallNumber(latestClip.ball_number + 1);
+    const channel = supabase
+      .channel(`videocapture_clips_${matchId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clips', filter: `match_id=eq.${matchId}` },
+        () => {
+          void loadMatchAndClips();
         }
-      } else {
-        setOverNumber(1);
-        setBallNumber(1);
-        setTotalRuns(0);
-        setTotalWickets(0);
-        setCurrentOvers('0');
-        setInningsComplete(false);
-      }
-
-      let usedQuery = supabase
-        .from('clips')
-        .select('ball_number')
-        .eq('match_id', matchId)
-        .eq('innings_number', inningsForQuery)
-        .eq('over_number', overNumber);
-
-      if (testDataFilter !== undefined) {
-        usedQuery = usedQuery.eq('is_test_data', testDataFilter);
-      }
-
-      const { data: usedData } = await usedQuery;
-
-      if (cancelled) return;
-
-      if (usedData) {
-        setUsedBalls(new Set(usedData.map(clip => clip.ball_number)));
-      }
-    };
-
-    load();
+      )
+      .subscribe();
 
     return () => {
-      cancelled = true;
+      supabase.removeChannel(channel);
     };
-  }, [matchId, overNumber, currentInnings]);
+  }, [matchId, loadMatchAndClips]);
 
   const initCamera = async (): Promise<boolean> => {
     if (cameraInitialized) return true;
@@ -581,6 +582,21 @@ export function VideoCapture() {
           </div>
         )}
 
+        <div className="flex justify-between items-center gap-2 mb-2">
+          <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-green-400">
+            <span className="text-sm text-gray-300">Over {overNumber} - Ball </span>
+            <span className="text-lg font-bold text-green-400">{ballNumber}</span>
+          </div>
+
+          {isRecording && (
+            <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
+              <span className="text-sm font-semibold">
+                {isPaused ? 'Paused ' : ''}{recordingTime}s / 15s
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-3 gap-2 mb-2">
           <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-green-400">
             <div className="text-gray-400 text-xs">Runs</div>
@@ -594,21 +610,6 @@ export function VideoCapture() {
             <div className="text-gray-400 text-xs">Wickets</div>
             <div className="text-red-400 text-lg font-bold">{totalWickets}</div>
           </div>
-        </div>
-
-        <div className="flex justify-between items-center gap-2">
-          <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-green-400">
-            <span className="text-sm text-gray-300">Over {overNumber} - Ball </span>
-            <span className="text-lg font-bold text-green-400">{ballNumber}</span>
-          </div>
-
-          {isRecording && (
-            <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
-              <span className="text-sm font-semibold">
-                {isPaused ? 'Paused ' : ''}{recordingTime}s / 15s
-              </span>
-            </div>
-          )}
         </div>
       </div>
 

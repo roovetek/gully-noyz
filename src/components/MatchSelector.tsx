@@ -9,7 +9,11 @@ import { hashSecret, verifySecret, SecureStorage } from '../lib/security';
 import { validateMatchId, normalizeMatchId } from '../lib/validation';
 import { STORAGE_KEYS, ERROR_MESSAGES } from '../lib/constants';
 
-export function MatchSelector() {
+interface MatchSelectorProps {
+  onOpenGullyRulz?: () => void;
+}
+
+export function MatchSelector({ onOpenGullyRulz }: MatchSelectorProps) {
   const { setMatchId, setMatchName } = useMatch();
   const [joinId, setJoinId] = useState('');
   const [error, setError] = useState('');
@@ -215,6 +219,18 @@ export function MatchSelector() {
             <List size={24} />
             <span className="text-lg">Browse All Matches</span>
           </button>
+
+          {onOpenGullyRulz && (
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={onOpenGullyRulz}
+                className="text-sm text-gray-500 hover:text-gray-300 underline"
+              >
+                Gully Rulz (rules and info)
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

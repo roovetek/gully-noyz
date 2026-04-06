@@ -52,6 +52,8 @@ export const STORAGE_KEYS = {
   MATCH_ID: 'current_match_id',
   MATCH_NAME: 'current_match_name',
   MATCH_SECRET_PREFIX: 'match_secret_',
+  /** Last main tab (record/timeline/stats/info) for refresh/back within a match */
+  APP_ACTIVE_TAB: 'app_active_tab',
 } as const;
 
 export const MEDIA_CONSTRAINTS: MediaStreamConstraints = {

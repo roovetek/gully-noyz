@@ -112,10 +112,13 @@ export function MatchInfo() {
             <div className="rounded-2xl border border-red-700 bg-gray-900 p-5 space-y-4">
               <h2 className="text-xl font-bold text-white">Admin Recovery</h2>
               <p className="text-sm text-gray-300">
-                Reset this match secret and both role passcodes if they are forgotten. This requires dashboard admin passcode.
+                Replaces the <strong className="text-white">private match secret</strong>,{' '}
+                <strong className="text-white">umpire passcode</strong>, and{' '}
+                <strong className="text-white">scorer passcode</strong> in one step. Everyone must use the new values
+                after this. Requires your <strong className="text-white">dashboard admin</strong> passcode.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="md:col-span-2">
+              <div className="space-y-4 max-w-lg">
+                <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">Dashboard admin passcode</label>
                   <input
                     type="password"
@@ -126,7 +129,7 @@ export function MatchInfo() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">New match secret (min 6)</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">New match secret (min 6 characters)</label>
                   <input
                     type="password"
                     value={newSecret}
@@ -145,7 +148,7 @@ export function MatchInfo() {
                     autoComplete="new-password"
                   />
                 </div>
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">New scorer passcode (min 4)</label>
                   <input
                     type="password"
@@ -155,9 +158,9 @@ export function MatchInfo() {
                     autoComplete="new-password"
                   />
                 </div>
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">
-                    Confirm by typing match ID: <span className="font-mono text-yellow-400">{matchId}</span>
+                    Confirm — type match ID: <span className="font-mono text-yellow-400">{matchId}</span>
                   </label>
                   <input
                     type="text"

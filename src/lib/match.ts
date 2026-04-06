@@ -95,8 +95,24 @@ export function getNextBall(
   };
 }
 
+/** Cricket-style overs for one innings (e.g. 1.3 = 1 over + 3 balls). Matches MatchStats / Record logic. */
+export function calculateInningsOversDisplay(
+  clips: Array<{ over_number: number }>,
+  ballsPerOver: number
+): string {
+  if (!clips.length || ballsPerOver < 1) {
+    return '0';
+  }
+  const uniqueOvers = new Set(clips.map((c) => c.over_number));
+  const maxOver = Math.max(...Array.from(uniqueOvers));
+  const ballsInLastOver = clips.filter((c) => c.over_number === maxOver).length;
+  const completedOvers = ballsInLastOver === ballsPerOver ? maxOver : maxOver - 1;
+  const remainingBalls = ballsInLastOver === ballsPerOver ? 0 : ballsInLastOver;
+  return remainingBalls === 0 ? completedOvers.toString() : `${completedOvers}.${remainingBalls}`;
+}
+
 export function calculateMatchStats(
-  clips: Array<{ outcome: string; dismissal_type?: string | null }>,
+  clips: Array<{ outcome: string; dismissal_type?: string | null; over_number: number }>,
   ballsPerOver: number
 ): MatchStats {
   const runs = clips.reduce((total, clip) => {
@@ -108,7 +124,7 @@ export function calculateMatchStats(
     (clip) => clip.outcome === 'wicket' || clip.dismissal_type != null
   ).length;
 
-  const currentOvers = calculateOversDisplay(clips.length, ballsPerOver);
+  const currentOvers = calculateInningsOversDisplay(clips, ballsPerOver);
 
   return {
     totalRuns: runs,

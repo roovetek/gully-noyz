@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { supabase, Clip } from '../lib/supabase';
 import { getTestDataFilter } from '../lib/testDataFilter';
+import { calculateInningsOversDisplay } from '../lib/match';
 
 interface InningsSummary {
   inningsNumber: number;
@@ -37,13 +38,8 @@ export function MatchStats() {
   const [loading, setLoading] = useState(true);
   const [matchConfig, setMatchConfig] = useState({ ballsPerOver: 6, totalOvers: 20 });
 
-  useEffect(() => {
-    if (matchId) {
-      fetchMatchData();
-    }
-  }, [matchId]);
-
-  const fetchMatchData = async () => {
+  const fetchMatchData = useCallback(async () => {
+    if (!matchId) return;
     setLoading(true);
 
     const { data: matchData } = await supabase
@@ -88,7 +84,28 @@ export function MatchStats() {
     }
 
     setLoading(false);
-  };
+  }, [matchId]);
+
+  useEffect(() => {
+    if (!matchId) return;
+
+    fetchMatchData();
+
+    const channel = supabase
+      .channel(`match_stats_clips_${matchId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clips', filter: `match_id=eq.${matchId}` },
+        () => {
+          fetchMatchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [matchId, fetchMatchData]);
 
   const calculateInningsSummary = (inningsNumber: number, clips: Clip[], ballsPerOver: number): InningsSummary => {
     const totalRuns = clips.reduce((sum, clip) => {
@@ -98,12 +115,7 @@ export function MatchStats() {
 
     const totalWickets = clips.filter(isWicketBall).length;
 
-    const uniqueOvers = new Set(clips.map(c => c.over_number));
-    const maxOver = Math.max(...Array.from(uniqueOvers));
-    const ballsInLastOver = clips.filter(c => c.over_number === maxOver).length;
-    const completedOvers = ballsInLastOver === ballsPerOver ? maxOver : maxOver - 1;
-    const remainingBalls = ballsInLastOver === ballsPerOver ? 0 : ballsInLastOver;
-    const totalOvers = remainingBalls === 0 ? completedOvers.toString() : `${completedOvers}.${remainingBalls}`;
+    const totalOvers = calculateInningsOversDisplay(clips, ballsPerOver);
 
     return {
       inningsNumber,
