@@ -1,24 +1,50 @@
 import { executeTrackedAction, supabase } from './supabase';
 import { MatchRules, MatchRuleOverride } from './types';
 
+/** Defaults match DB migration seed when no row exists or values are null/invalid. */
+export const DEFAULT_GLOBAL_RULES: MatchRules = {
+  overs_per_innings: 20,
+  balls_per_over: 6,
+  max_wickets: 10,
+  max_overs_per_bowler: 4,
+  wide_no_runs: false,
+  wide_no_ball_count: false,
+  legbye_no_runs: false,
+  consecutive_overs_required: false,
+};
+
+function coerceGlobalRulesRow(data: Record<string, unknown>): MatchRules {
+  const num = (v: unknown, fallback: number) => {
+    const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+
+  return {
+    overs_per_innings: num(data.overs_per_innings, DEFAULT_GLOBAL_RULES.overs_per_innings),
+    balls_per_over: num(data.balls_per_over, DEFAULT_GLOBAL_RULES.balls_per_over),
+    max_wickets: num(data.max_wickets, DEFAULT_GLOBAL_RULES.max_wickets),
+    max_overs_per_bowler: num(data.max_overs_per_bowler, DEFAULT_GLOBAL_RULES.max_overs_per_bowler),
+    wide_no_runs: bool(data.wide_no_runs, DEFAULT_GLOBAL_RULES.wide_no_runs),
+    wide_no_ball_count: bool(data.wide_no_ball_count, DEFAULT_GLOBAL_RULES.wide_no_ball_count),
+    legbye_no_runs: bool(data.legbye_no_runs, DEFAULT_GLOBAL_RULES.legbye_no_runs),
+    consecutive_overs_required: bool(
+      data.consecutive_overs_required,
+      DEFAULT_GLOBAL_RULES.consecutive_overs_required
+    ),
+  };
+}
+
 export async function getGlobalRules(): Promise<MatchRules | null> {
   const { data, error } = await supabase
     .from('global_rules')
     .select('*')
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) return null;
+  if (!data) return null;
 
-  return {
-    overs_per_innings: data.overs_per_innings,
-    balls_per_over: data.balls_per_over,
-    max_wickets: data.max_wickets,
-    max_overs_per_bowler: data.max_overs_per_bowler,
-    wide_no_runs: data.wide_no_runs,
-    wide_no_ball_count: data.wide_no_ball_count,
-    legbye_no_runs: data.legbye_no_runs,
-    consecutive_overs_required: data.consecutive_overs_required,
-  };
+  return coerceGlobalRulesRow(data as Record<string, unknown>);
 }
 
 export async function updateGlobalRules(

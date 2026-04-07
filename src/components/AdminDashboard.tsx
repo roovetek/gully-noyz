@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Settings, Save, AlertCircle, CheckCircle, X, Trash2, List, Activity, Lock } from 'lucide-react';
-import { getGlobalRules, updateGlobalRules } from '../lib/rulesEngine';
+import { DEFAULT_GLOBAL_RULES, getGlobalRules, updateGlobalRules } from '../lib/rulesEngine';
 import { validateAdminAccess } from '../lib/accessControl';
 import { changeGlobalAdminPasscode } from '../lib/globalAdmin';
 import { MatchRules } from '../lib/types';
@@ -10,7 +10,7 @@ import { deleteMatch } from '../lib/deleteMatch';
 import { getDeploymentInfo, validateDeploymentSync, DeploymentInfo } from '../lib/deploymentVersion';
 
 interface AdminDashboardProps {
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 interface AdminMatchRow {
@@ -19,7 +19,7 @@ interface AdminMatchRow {
   created_at: string;
 }
 
-export function AdminDashboard({ onClose }: AdminDashboardProps) {
+export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   /** In-memory only: used for RPCs that require dashboard passcode (save rules, delete match). */
   const [adminSessionSecret, setAdminSessionSecret] = useState('');
@@ -52,9 +52,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
 
   const loadRules = async () => {
     const globalRules = await getGlobalRules();
-    if (globalRules) {
-      setRules(globalRules);
-    }
+    setRules(globalRules ?? DEFAULT_GLOBAL_RULES);
   };
 
   const closeDashboard = useCallback(() => {
@@ -105,6 +103,15 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
     if (rules) {
       setRules({ ...rules, [key]: value });
     }
+  };
+
+  type NumericRuleKey = 'overs_per_innings' | 'balls_per_over' | 'max_wickets' | 'max_overs_per_bowler';
+
+  const setNumericRule = (key: NumericRuleKey, raw: string, min: number, max: number) => {
+    if (!rules) return;
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n)) return;
+    setRules({ ...rules, [key]: Math.min(max, Math.max(min, n)) });
   };
 
   const loadAdminMatches = useCallback(async () => {
@@ -188,16 +195,11 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-black text-white p-4 pb-24">
-        <div className="mx-auto w-full max-w-md bg-white rounded-lg shadow-xl mt-4">
-          <div className="flex items-center justify-between p-6 border-b">
-            <div className="flex items-center gap-3">
-              <Settings className="text-gray-700" size={24} />
-              <h2 className="text-xl font-semibold text-gray-900">Dashboard admin</h2>
-            </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close dashboard">
-              <X size={24} />
-            </button>
+      <div className="min-h-[calc(100vh-4rem)] bg-gray-50 text-gray-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-lg shadow-xl">
+          <div className="flex items-center gap-3 p-6 border-b">
+            <Settings className="text-gray-700" size={24} />
+            <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
           </div>
 
           <div className="p-6 space-y-4">
@@ -241,27 +243,18 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
 
   if (!rules && isAuthenticated && adminSection === 'rules') {
     return (
-      <div className="min-h-screen bg-black text-white p-4 pb-24">
-        <div className="mx-auto bg-white rounded-lg p-6 flex flex-col items-center gap-4 max-w-md mt-4">
-          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
-        </div>
+      <div className="min-h-[calc(100vh-4rem)] bg-gray-50 text-gray-900 flex items-center justify-center p-4">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 pb-24">
-      <div className="mx-auto bg-white rounded-lg shadow-xl max-w-4xl w-full my-4">
-        <div className="flex items-center justify-between p-6 border-b bg-white rounded-t-lg gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <Settings className="text-gray-700" size={24} />
-            <h2 className="text-xl font-semibold text-gray-900 truncate">Dashboard</h2>
-          </div>
-          <button onClick={closeDashboard} className="text-gray-400 hover:text-gray-600 flex-shrink-0 p-1 ml-1">
-            <X size={24} />
-          </button>
-        </div>
+    <div className="min-h-[calc(100vh-4rem)] bg-white text-gray-900">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <Settings className="text-gray-700" size={24} />
+        <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
+      </div>
 
         <div className="p-6 space-y-6">
           <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
@@ -472,7 +465,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                 <input
                   type="number"
                   value={rules.overs_per_innings}
-                  onChange={(e) => updateRule('overs_per_innings', parseInt(e.target.value))}
+                  onChange={(e) => setNumericRule('overs_per_innings', e.target.value, 1, 50)}
                   min="1"
                   max="50"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -486,7 +479,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                 <input
                   type="number"
                   value={rules.balls_per_over}
-                  onChange={(e) => updateRule('balls_per_over', parseInt(e.target.value))}
+                  onChange={(e) => setNumericRule('balls_per_over', e.target.value, 2, 8)}
                   min="2"
                   max="8"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -500,7 +493,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                 <input
                   type="number"
                   value={rules.max_wickets}
-                  onChange={(e) => updateRule('max_wickets', parseInt(e.target.value))}
+                  onChange={(e) => setNumericRule('max_wickets', e.target.value, 1, 11)}
                   min="1"
                   max="11"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -514,7 +507,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                 <input
                   type="number"
                   value={rules.max_overs_per_bowler}
-                  onChange={(e) => updateRule('max_overs_per_bowler', parseInt(e.target.value))}
+                  onChange={(e) => setNumericRule('max_overs_per_bowler', e.target.value, 1, 10)}
                   min="1"
                   max="10"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

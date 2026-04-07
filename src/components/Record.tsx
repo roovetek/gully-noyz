@@ -56,7 +56,7 @@ export function Record() {
 
   return (
     <div className="fixed inset-0 bg-black text-white pt-16 pb-20">
-      <div className="absolute top-2 left-4 right-4 z-20 flex items-center justify-between gap-2">
+      <div className="absolute top-16 left-4 right-4 z-20 flex items-center justify-between gap-2 pt-1">
         <button
           onClick={handleHome}
           className="bg-black/70 backdrop-blur p-2 rounded-lg border border-green-400 hover:bg-green-400/20 transition-colors flex-shrink-0"

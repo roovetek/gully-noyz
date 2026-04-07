@@ -187,7 +187,7 @@ export function MatchStats() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-[calc(100vh-4rem)] bg-black text-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-400">Loading match stats...</p>
@@ -199,7 +199,7 @@ export function MatchStats() {
   const summaries = [innings2Summary, innings1Summary].filter(Boolean) as InningsSummary[];
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20 pt-16">
+    <div className="min-h-screen bg-black text-white pb-20">
       <div className="p-4 mb-4 bg-gray-900 border-b border-gray-800">
         <div className="flex items-center justify-center mb-4">
           <div className="bg-gray-900 px-4 py-2 rounded-lg border border-yellow-400">

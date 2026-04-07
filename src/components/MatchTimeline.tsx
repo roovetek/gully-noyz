@@ -199,7 +199,7 @@ export function MatchTimeline() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white pb-20 flex items-center justify-center">
+      <div className="min-h-[calc(100vh-4rem)] bg-black text-white pb-20 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-400">Loading clips...</p>
@@ -210,7 +210,7 @@ export function MatchTimeline() {
 
   if (clips.length === 0) {
     return (
-      <div className="min-h-screen bg-black text-white pb-20 flex items-center justify-center">
+      <div className="min-h-[calc(100vh-4rem)] bg-black text-white pb-20 flex items-center justify-center">
         <div className="text-center px-4">
           <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
             <Play size={32} className="text-gray-600" />

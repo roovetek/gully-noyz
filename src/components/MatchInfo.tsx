@@ -82,7 +82,7 @@ export function MatchInfo() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20 pt-16">
+    <div className="min-h-screen bg-black text-white pb-20">
       <div className="p-4 bg-gray-900 border-b border-gray-800">
         <div className="flex items-center gap-3">
           <Info size={24} className="text-green-400" />
