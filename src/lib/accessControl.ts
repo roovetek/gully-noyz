@@ -9,10 +9,17 @@ export async function validateRole(
 ): Promise<boolean> {
   if (!role) return false;
 
-  const { data, error } = await supabase.rpc('verify_match_role_passcode', {
-    p_match_id: matchId,
-    p_role: role,
-    p_passcode: passcode,
+  const { data, error } = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'verify_match_role_passcode',
+    matchId,
+    payload: { role },
+    execute: () =>
+      supabase.rpc('verify_match_role_passcode', {
+        p_match_id: matchId,
+        p_role: role,
+        p_passcode: passcode,
+      }),
   });
 
   if (error) {

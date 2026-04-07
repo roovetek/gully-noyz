@@ -505,6 +505,8 @@ export function VideoCapture() {
   };
 
   const handleSaveOverEdits = async () => {
+    if (!matchId) return;
+
     for (const ball of editableOverBalls) {
       const selectedOutcome = editBallOutcome[ball.ball_number] ?? ball.outcome;
       const selectedDismissal = editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? '';
@@ -516,14 +518,43 @@ export function VideoCapture() {
         setError(`Select dismissal type for ball ${ball.ball_number}`);
         return;
       }
-
-      if (ball.id) {
-        await supabase
-          .from('clips')
-          .update({ outcome: normalizedOutcome, dismissal_type: normalizedDismissal })
-          .eq('id', ball.id);
-      }
     }
+
+    const { error: batchError } = await executeTrackedAction({
+      tableName: 'clips',
+      action: 'update_over_outcomes',
+      matchId,
+      payload: {
+        innings_number: currentInnings,
+        ball_numbers: editableOverBalls.map((b) => b.ball_number),
+      },
+      execute: async () => {
+        for (const ball of editableOverBalls) {
+          const selectedOutcome = editBallOutcome[ball.ball_number] ?? ball.outcome;
+          const selectedDismissal = editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? '';
+          const normalizedOutcome = selectedOutcome.toLowerCase();
+          const normalizedDismissal =
+            normalizedOutcome === 'wicket' ? (selectedDismissal ? selectedDismissal.toLowerCase() : null) : null;
+
+          if (ball.id) {
+            const { error } = await supabase
+              .from('clips')
+              .update({ outcome: normalizedOutcome, dismissal_type: normalizedDismissal })
+              .eq('id', ball.id);
+            if (error) {
+              return { error };
+            }
+          }
+        }
+        return { error: null };
+      },
+    });
+
+    if (batchError) {
+      setError('Failed to save over edits.');
+      return;
+    }
+
     setUmpireAuthenticated(false);
     setEditableOverBalls([]);
     setEditBallOutcome({});

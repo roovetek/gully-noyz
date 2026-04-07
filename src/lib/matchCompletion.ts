@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { executeTrackedAction, supabase } from './supabase';
 
 export async function completeMatch(
   matchId: string,
@@ -9,28 +9,40 @@ export async function completeMatch(
 ): Promise<void> {
   const status = resultType === 'abandoned' ? 'abandoned' : 'completed';
 
-  const { error: matchError } = await supabase
-    .from('matches')
-    .update({
-      status,
-      result_type: resultType,
-      winner: winner || null,
-    })
-    .eq('match_id', matchId);
+  const { error: matchError } = await executeTrackedAction({
+    tableName: 'matches',
+    action: 'complete_status',
+    matchId,
+    payload: { status, result_type: resultType },
+    execute: () =>
+      supabase
+        .from('matches')
+        .update({
+          status,
+          result_type: resultType,
+          winner: winner || null,
+        })
+        .eq('match_id', matchId),
+  });
 
   if (matchError) {
     throw new Error(`Failed to update match status: ${matchError.message}`);
   }
 
-  const { error: resultError } = await supabase
-    .from('match_results')
-    .insert({
-      match_id: matchId,
-      status: resultType === 'tie' ? 'tie' : status,
-      winner: winner || null,
-      completion_reason: reason || `Match ${resultType}`,
-      completed_by_role: completedByRole,
-    });
+  const { error: resultError } = await executeTrackedAction({
+    tableName: 'match_results',
+    action: 'insert',
+    matchId,
+    payload: { status: resultType === 'tie' ? 'tie' : status, completed_by_role: completedByRole },
+    execute: () =>
+      supabase.from('match_results').insert({
+        match_id: matchId,
+        status: resultType === 'tie' ? 'tie' : status,
+        winner: winner || null,
+        completion_reason: reason || `Match ${resultType}`,
+        completed_by_role: completedByRole,
+      }),
+  });
 
   if (resultError) {
     throw new Error(`Failed to create match result: ${resultError.message}`);
@@ -99,10 +111,13 @@ export async function deleteLastBall(matchId: string, innings: number): Promise<
     throw new Error('No balls to delete');
   }
 
-  const { error: deleteError } = await supabase
-    .from('clips')
-    .delete()
-    .eq('id', data.id);
+  const { error: deleteError } = await executeTrackedAction({
+    tableName: 'clips',
+    action: 'delete_last_ball',
+    matchId,
+    payload: { clip_id: data.id, innings },
+    execute: () => supabase.from('clips').delete().eq('id', data.id),
+  });
 
   if (deleteError) {
     throw new Error(`Failed to delete ball: ${deleteError.message}`);

@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { executeTrackedAction, supabase } from './supabase';
 import { MatchRules, MatchRuleOverride } from './types';
 
 export async function getGlobalRules(): Promise<MatchRules | null> {
@@ -31,9 +31,16 @@ export async function updateGlobalRules(
     throw new Error('Dashboard passcode is required to update global rules.');
   }
 
-  const { data, error } = await supabase.rpc('update_global_rules_as_admin', {
-    p_passcode: pass,
-    p_rules: rules as Record<string, unknown>,
+  const { data, error } = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'update_global_rules_as_admin',
+    matchId: null,
+    payload: { rules },
+    execute: () =>
+      supabase.rpc('update_global_rules_as_admin', {
+        p_passcode: pass,
+        p_rules: rules as Record<string, unknown>,
+      }),
   });
 
   if (error) {
@@ -105,28 +112,40 @@ export async function applyOverride(
   const originalValue = String(currentRules[ruleName]);
   const overrideValue = String(newValue);
 
-  const { error } = await supabase
-    .from('match_rule_overrides')
-    .insert({
-      match_id: matchId,
-      rule_name: ruleName,
-      original_value: originalValue,
-      override_value: overrideValue,
-      reason,
-      applied_by_role: role,
-    });
+  const { error } = await executeTrackedAction({
+    tableName: 'match_rule_overrides',
+    action: 'insert',
+    matchId,
+    payload: { rule_name: ruleName, reason, applied_by_role: role },
+    execute: () =>
+      supabase.from('match_rule_overrides').insert({
+        match_id: matchId,
+        rule_name: ruleName,
+        original_value: originalValue,
+        override_value: overrideValue,
+        reason,
+        applied_by_role: role,
+      }),
+  });
 
   if (error) throw new Error(`Failed to apply override: ${error.message}`);
 }
 
 export async function revertOverride(overrideId: string, role: 'umpire'): Promise<void> {
-  const { error } = await supabase
-    .from('match_rule_overrides')
-    .update({
-      reverted_at: new Date().toISOString(),
-      reverted_by_role: role,
-    })
-    .eq('id', overrideId);
+  const { error } = await executeTrackedAction({
+    tableName: 'match_rule_overrides',
+    action: 'revert',
+    matchId: null,
+    payload: { override_id: overrideId, reverted_by_role: role },
+    execute: () =>
+      supabase
+        .from('match_rule_overrides')
+        .update({
+          reverted_at: new Date().toISOString(),
+          reverted_by_role: role,
+        })
+        .eq('id', overrideId),
+  });
 
   if (error) throw new Error(`Failed to revert override: ${error.message}`);
 }

@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { executeTrackedAction, supabase } from './supabase';
 import { isValidMatchId } from './security';
 
 export type DeleteMatchResult =
@@ -7,7 +7,22 @@ export type DeleteMatchResult =
 
 type RpcDeleteResult = { ok?: boolean; error?: string };
 
-async function cleanupMatchStorage(matchId: string): Promise<void> {
+type CleanupOutcome = 'no_objects' | 'removed' | 'list_error' | 'remove_error';
+
+function deleteMatchErrorHint(message: string): string {
+  const m = message.toLowerCase();
+  const looksLikeDirectStorageSql =
+    m.includes('storage.objects') ||
+    (m.includes('storage') && m.includes('api')) ||
+    m.includes('use the storage') ||
+    (m.includes('permission denied') && m.includes('object'));
+  if (looksLikeDirectStorageSql) {
+    return `${message} Apply pending Supabase migrations (e.g. 20260408120000 or 20260409140000: admin_delete_match without deleting storage.objects).`;
+  }
+  return message;
+}
+
+async function cleanupMatchStorage(matchId: string): Promise<CleanupOutcome> {
   const bucket = supabase.storage.from('clips');
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -15,7 +30,7 @@ async function cleanupMatchStorage(matchId: string): Promise<void> {
 
     if (error) {
       console.warn(`Storage cleanup skipped for ${matchId}: ${error.message}`);
-      return;
+      return 'list_error';
     }
 
     const filePaths = (data ?? [])
@@ -24,19 +39,20 @@ async function cleanupMatchStorage(matchId: string): Promise<void> {
       .map((name) => `${matchId}/${name}`);
 
     if (filePaths.length === 0) {
-      return;
+      return 'no_objects';
     }
 
     const { error: removeError } = await bucket.remove(filePaths);
     if (removeError) {
       console.warn(`Storage cleanup skipped for ${matchId}: ${removeError.message}`);
-      return;
+      return 'remove_error';
     }
 
     if (filePaths.length < 100) {
-      return;
+      return 'removed';
     }
   }
+  return 'removed';
 }
 
 /**
@@ -53,10 +69,18 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
     return { ok: false, message: 'Dashboard passcode is required.' };
   }
 
-  const { data: isValidPasscode, error: verifyError } = await supabase.rpc('verify_global_admin_passcode', {
-    p_passcode: pass,
+  const verifyResult = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'verify_global_admin_passcode',
+    matchId: null,
+    payload: {},
+    execute: () =>
+      supabase.rpc('verify_global_admin_passcode', {
+        p_passcode: pass,
+      }),
   });
 
+  const { data: isValidPasscode, error: verifyError } = verifyResult;
   if (verifyError) {
     return { ok: false, message: verifyError.message };
   }
@@ -64,20 +88,39 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
     return { ok: false, message: 'Invalid dashboard passcode.' };
   }
 
-  await cleanupMatchStorage(trimmed);
+  await executeTrackedAction({
+    tableName: 'storage.clips',
+    action: 'remove_match_objects',
+    matchId: trimmed,
+    payload: { prefix: trimmed },
+    execute: async () => {
+      await cleanupMatchStorage(trimmed);
+      return { error: null };
+    },
+  });
 
-  const { data, error } = await supabase.rpc('admin_delete_match', {
-    p_match_id: trimmed,
-    p_passcode: pass,
+  const { data, error } = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'admin_delete_match',
+    matchId: trimmed,
+    payload: { match_id: trimmed },
+    execute: () =>
+      supabase.rpc('admin_delete_match', {
+        p_match_id: trimmed,
+        p_passcode: pass,
+      }),
   });
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: deleteMatchErrorHint(error.message) };
   }
 
   const row = data as RpcDeleteResult | null;
   if (row?.ok) {
     return { ok: true };
   }
-  return { ok: false, message: row?.error || 'Failed to delete match.' };
+  return {
+    ok: false,
+    message: deleteMatchErrorHint(row?.error || 'Failed to delete match.'),
+  };
 }

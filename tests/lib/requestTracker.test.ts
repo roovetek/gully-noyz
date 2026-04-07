@@ -1,38 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const supabaseMocks = vi.hoisted(() => {
-  const eqMock = vi.fn().mockResolvedValue({ error: null });
-  const updateMock = vi.fn(() => ({ eq: eqMock }));
-  const insertMock = vi.fn().mockResolvedValue({ error: null });
-  const fromMock = vi.fn((tableName: string) => {
-    if (tableName === 'audit_logs') {
-      return {
-        insert: insertMock,
-        update: updateMock,
-      };
-    }
-
-    return {
-      insert: vi.fn(),
-      update: vi.fn(),
-    };
-  });
-
-  return {
-    eqMock,
-    updateMock,
-    insertMock,
-    fromMock,
-  };
-});
+const auditRpc = vi.hoisted(() => vi.fn());
 
 vi.mock('../../src/lib/supabase', async () => {
   const actual = await vi.importActual<typeof import('../../src/lib/supabase')>('../../src/lib/supabase');
 
+  auditRpc.mockImplementation((name: string) => {
+    if (name === 'audit_log_create' || name === 'audit_log_update') {
+      return Promise.resolve({ data: { ok: true }, error: null });
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
+
   return {
     ...actual,
     supabase: {
-      from: supabaseMocks.fromMock,
+      ...actual.supabase,
+      rpc: auditRpc,
     },
     isAuditLoggingEnabled: true,
   };
@@ -43,8 +27,12 @@ import { executeTrackedAction, sanitizeAuditPayload } from '../../src/lib/supaba
 describe('executeTrackedAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    supabaseMocks.eqMock.mockResolvedValue({ error: null });
-    supabaseMocks.insertMock.mockResolvedValue({ error: null });
+    auditRpc.mockImplementation((name: string) => {
+      if (name === 'audit_log_create' || name === 'audit_log_update') {
+        return Promise.resolve({ data: { ok: true }, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
   });
 
   it('redacts sensitive values and summarizes binary payloads', () => {
@@ -79,22 +67,23 @@ describe('executeTrackedAction', () => {
     });
 
     expect(response).toEqual({ data: { id: 'match-row' }, error: null });
-    expect(supabaseMocks.fromMock).toHaveBeenCalledWith('audit_logs');
-    expect(supabaseMocks.insertMock).toHaveBeenCalledWith(
+    expect(auditRpc).toHaveBeenCalledWith(
+      'audit_log_create',
       expect.objectContaining({
-        match_id: 'MATCH1',
-        endpoint_name: 'matches.create_match',
-        status_code: 'pending',
-        request_payload: {
+        p_match_id: 'MATCH1',
+        p_endpoint_name: 'matches.create_match',
+        p_status_code: 'pending',
+        p_request_payload: {
           name: 'Finals',
           matchSecret: '[REDACTED]',
         },
       })
     );
-    expect(supabaseMocks.updateMock).toHaveBeenCalledWith(
+    expect(auditRpc).toHaveBeenCalledWith(
+      'audit_log_update',
       expect.objectContaining({
-        response_body: { data: { id: 'match-row' }, error: null },
-        status_code: 'success',
+        p_status_code: 'success',
+        p_response_body: { data: { id: 'match-row' }, error: null },
       })
     );
   });
@@ -114,10 +103,11 @@ describe('executeTrackedAction', () => {
       })
     ).rejects.toThrow('database failed');
 
-    expect(supabaseMocks.updateMock).toHaveBeenCalledWith(
+    expect(auditRpc).toHaveBeenCalledWith(
+      'audit_log_update',
       expect.objectContaining({
-        status_code: 'error',
-        response_body: expect.objectContaining({
+        p_status_code: 'error',
+        p_response_body: expect.objectContaining({
           message: 'database failed',
         }),
       })

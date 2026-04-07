@@ -2,13 +2,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const hoisted = vi.hoisted(() => ({
   rpc: vi.fn(),
+  storageList: vi.fn().mockResolvedValue({ data: [], error: null }),
+  storageRemove: vi.fn().mockResolvedValue({ error: null }),
 }));
 
-vi.mock('../../src/lib/supabase', () => ({
-  supabase: {
-    rpc: hoisted.rpc,
-  },
-}));
+vi.mock('../../src/lib/supabase', async () => {
+  const actual = await vi.importActual<typeof import('../../src/lib/supabase')>('../../src/lib/supabase');
+  return {
+    ...actual,
+    isAuditLoggingEnabled: false,
+    supabase: {
+      ...actual.supabase,
+      rpc: hoisted.rpc,
+      storage: {
+        from: () => ({
+          list: hoisted.storageList,
+          remove: hoisted.storageRemove,
+        }),
+      },
+    },
+  };
+});
 
 import { deleteMatch } from '../../src/lib/deleteMatch';
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Users, Video, CreditCard as Edit2, Lock, Check, X, Search } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { executeTrackedAction, supabase } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { SecretPrompt } from './SecretPrompt';
 import { getTestDataFilter } from '../lib/testDataFilter';
@@ -247,15 +247,27 @@ export function MatchList({ onBack }: MatchListProps) {
     if (!newName.trim()) return;
 
     try {
-      const { error } = await supabase
-        .from('matches')
-        .update({
+      const { error } = await executeTrackedAction({
+        tableName: 'matches',
+        action: 'update_from_list',
+        matchId,
+        payload: {
           name: newName.trim(),
           total_overs: newTotalOvers * 2,
           overs_per_innings: newTotalOvers,
-          balls_per_over: newBallsPerOver
-        })
-        .eq('match_id', matchId);
+          balls_per_over: newBallsPerOver,
+        },
+        execute: () =>
+          supabase
+            .from('matches')
+            .update({
+              name: newName.trim(),
+              total_overs: newTotalOvers * 2,
+              overs_per_innings: newTotalOvers,
+              balls_per_over: newBallsPerOver,
+            })
+            .eq('match_id', matchId),
+      });
 
       if (error) throw error;
 

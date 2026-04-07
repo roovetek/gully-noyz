@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { MatchProvider, useMatch } from './context/MatchContext';
 import { SecureStorage } from './lib/security';
 import { STORAGE_KEYS } from './lib/constants';
-import { MatchSelector } from './components/MatchSelector';
 import { Record } from './components/Record';
 import { Timeline } from './components/Timeline';
 import { MatchStats } from './components/MatchStats';
@@ -11,7 +10,6 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Footer } from './components/Footer';
-import { GullyRulz } from './components/AppInfo';
 
 type MainTab = 'record' | 'timeline' | 'stats' | 'info';
 
@@ -54,10 +52,6 @@ function AppContent() {
     prevMatchId.current = matchId;
   }, [matchId]);
 
-  const handleOpenGullyRulz = () => {
-    setActiveTab('gullyRulz');
-  };
-
   const handleGoHome = () => {
     setActiveTab('record');
     setMatchId(null);
@@ -75,19 +69,16 @@ function AppContent() {
     <div className="min-h-screen bg-black flex flex-col">
       <Header onHome={handleGoHome} onOpenAdmin={handleOpenAdmin} />
       <div className="pt-16 flex-1">
+        {/* Ensure consistent spacing below the fixed header */}
         {activeTab === 'admin' ? (
           <AdminDashboard onClose={handleCloseAdmin} />
-        ) : activeTab === 'gullyRulz' ? (
-          <GullyRulz />
-        ) : !matchId ? (
-          <MatchSelector onOpenGullyRulz={handleOpenGullyRulz} />
         ) : (
-          <div className="pb-24">
+          <>
             {activeTab === 'record' && <Record />}
             {activeTab === 'timeline' && <Timeline />}
             {activeTab === 'stats' && <MatchStats />}
             {activeTab === 'info' && <MatchInfo />}
-          </div>
+          </>
         )}
       </div>
       {activeTab !== 'admin' && activeTab !== 'gullyRulz' && (

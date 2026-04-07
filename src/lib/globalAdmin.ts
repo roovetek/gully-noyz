@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { executeTrackedAction, supabase } from './supabase';
 
 const LEGACY_LS_KEY = 'admin_passcode_hash';
 
@@ -22,8 +22,15 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
   if (typeof window !== 'undefined') {
     const legacy = localStorage.getItem(LEGACY_LS_KEY);
     if (legacy && !(await rpcConfigured())) {
-      const { data: migrated, error } = await supabase.rpc('migrate_legacy_dashboard_hash', {
-        p_legacy_hash: legacy,
+      const { data: migrated, error } = await executeTrackedAction({
+        tableName: 'rpc',
+        action: 'migrate_legacy_dashboard_hash',
+        matchId: null,
+        payload: {},
+        execute: () =>
+          supabase.rpc('migrate_legacy_dashboard_hash', {
+            p_legacy_hash: legacy,
+          }),
       });
       if (!error && migrated) {
         try {
@@ -38,8 +45,15 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
   const configured = await rpcConfigured();
 
   if (!configured) {
-    const { data, error } = await supabase.rpc('bootstrap_global_admin_passcode', {
-      p_passcode: trimmed,
+    const { data, error } = await executeTrackedAction({
+      tableName: 'rpc',
+      action: 'bootstrap_global_admin_passcode',
+      matchId: null,
+      payload: {},
+      execute: () =>
+        supabase.rpc('bootstrap_global_admin_passcode', {
+          p_passcode: trimmed,
+        }),
     });
     if (error) {
       console.error('bootstrap_global_admin_passcode failed', error);
@@ -57,8 +71,15 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
     return ok;
   }
 
-  const { data: valid, error: verifyError } = await supabase.rpc('verify_global_admin_passcode', {
-    p_passcode: trimmed,
+  const { data: valid, error: verifyError } = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'verify_global_admin_passcode',
+    matchId: null,
+    payload: {},
+    execute: () =>
+      supabase.rpc('verify_global_admin_passcode', {
+        p_passcode: trimmed,
+      }),
   });
   if (verifyError) {
     console.error('verify_global_admin_passcode failed', verifyError);
@@ -78,9 +99,16 @@ export async function changeGlobalAdminPasscode(
   currentPasscode: string,
   newPasscode: string
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { data, error } = await supabase.rpc('change_global_admin_passcode', {
-    p_current: currentPasscode.trim(),
-    p_new: newPasscode.trim(),
+  const { data, error } = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'change_global_admin_passcode',
+    matchId: null,
+    payload: {},
+    execute: () =>
+      supabase.rpc('change_global_admin_passcode', {
+        p_current: currentPasscode.trim(),
+        p_new: newPasscode.trim(),
+      }),
   });
   if (error) {
     return { ok: false, message: error.message };
@@ -103,12 +131,20 @@ export interface ResetMatchCredentialsInput {
 export async function resetMatchCredentials(
   input: ResetMatchCredentialsInput
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { data, error } = await supabase.rpc('admin_reset_match_credentials', {
-    p_match_id: input.matchId.trim().toUpperCase(),
-    p_admin_passcode: input.adminPasscode.trim(),
-    p_new_match_secret: input.newMatchSecret.trim(),
-    p_new_umpire_passcode: input.newUmpirePasscode.trim(),
-    p_new_scorer_passcode: input.newScorerPasscode.trim(),
+  const mid = input.matchId.trim().toUpperCase();
+  const { data, error } = await executeTrackedAction({
+    tableName: 'rpc',
+    action: 'admin_reset_match_credentials',
+    matchId: mid,
+    payload: { match_id: mid },
+    execute: () =>
+      supabase.rpc('admin_reset_match_credentials', {
+        p_match_id: mid,
+        p_admin_passcode: input.adminPasscode.trim(),
+        p_new_match_secret: input.newMatchSecret.trim(),
+        p_new_umpire_passcode: input.newUmpirePasscode.trim(),
+        p_new_scorer_passcode: input.newScorerPasscode.trim(),
+      }),
   });
   if (error) {
     return { ok: false, message: error.message };

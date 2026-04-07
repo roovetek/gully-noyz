@@ -22,7 +22,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-export const isAuditLoggingEnabled = String(rawAuditLoggingEnabled ?? 'false').trim().toLowerCase() === 'true';
+/** Default on; set `VITE_ENABLE_AUDIT_LOGGING=false` to disable. */
+export const isAuditLoggingEnabled =
+  String(rawAuditLoggingEnabled ?? 'true').trim().toLowerCase() === 'true';
 
 const SENSITIVE_KEY_PATTERN = /(secret|passcode|password|token|authorization|api[_-]?key|hash)/i;
 const MAX_SANITIZE_DEPTH = 6;
@@ -77,7 +79,17 @@ function toErrorMessage(error: unknown): string {
 }
 
 function getResultStatusCode(result: unknown): 'success' | 'error' {
-  if (result && typeof result === 'object' && 'error' in result && (result as { error?: unknown }).error) {
+  if (!result || typeof result !== 'object') {
+    return 'success';
+  }
+
+  const r = result as { error?: unknown; data?: unknown };
+  if (r.error) {
+    return 'error';
+  }
+
+  const data = r.data;
+  if (data && typeof data === 'object' && 'ok' in data && (data as { ok?: boolean }).ok === false) {
     return 'error';
   }
 

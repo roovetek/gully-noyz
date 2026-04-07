@@ -2,7 +2,7 @@ import { useMatch } from '../context/MatchContext';
 import { VideoCapture } from './VideoCapture';
 import { Home, CreditCard as Edit2, Check, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { executeTrackedAction, supabase } from '../lib/supabase';
 
 export function Record() {
   const { matchId, matchName, setMatchId, setMatchName } = useMatch();
@@ -29,13 +29,17 @@ export function Record() {
   };
 
   const handleSaveName = async () => {
-    if (!editedName.trim()) return;
+    if (!editedName.trim() || !matchId) return;
 
     try {
-      const { error } = await supabase
-        .from('matches')
-        .update({ name: editedName.trim() })
-        .eq('match_id', matchId);
+      const { error } = await executeTrackedAction({
+        tableName: 'matches',
+        action: 'update_name',
+        matchId,
+        payload: { name: editedName.trim() },
+        execute: () =>
+          supabase.from('matches').update({ name: editedName.trim() }).eq('match_id', matchId),
+      });
 
       if (!error) {
         setMatchName(editedName.trim());
