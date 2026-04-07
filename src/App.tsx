@@ -1,19 +1,18 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { MatchProvider, useMatch } from './context/MatchContext';
 import { SecureStorage } from './lib/security';
 import { STORAGE_KEYS } from './lib/constants';
+import { hashFromAppState, parseAppHash, type AppTab, type MainTab } from './lib/appUrl';
 import { MatchSelector } from './components/MatchSelector';
 import { Record } from './components/Record';
 import { Timeline } from './components/Timeline';
 import { MatchStats } from './components/MatchStats';
 import { MatchInfo } from './components/MatchInfo';
 import { AdminDashboard } from './components/AdminDashboard';
-import { Header } from './components/Header';
+import { Header, type NavHighlight } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Footer } from './components/Footer';
 import { GullyRulz } from './components/AppInfo';
-
-type MainTab = 'record' | 'timeline' | 'stats' | 'info';
 
 function readStoredMainTab(): MainTab {
   const raw = SecureStorage.getItem(STORAGE_KEYS.APP_ACTIVE_TAB);
@@ -25,21 +24,58 @@ function readStoredMainTab(): MainTab {
 
 function AppContent() {
   const { matchId, setMatchId } = useMatch();
-  const [activeTab, setActiveTabState] = useState<
-    MainTab | 'gullyRulz' | 'admin'
-  >(() => (matchId ? readStoredMainTab() : 'record'));
+  const [activeTab, setActiveTabState] = useState<AppTab>(() =>
+    matchId ? readStoredMainTab() : 'record'
+  );
   const prevMatchId = useRef<string | null>(null);
+  const skipHashEvent = useRef(false);
+  const didInitFromHash = useRef(false);
 
-  const setActiveTab = (tab: MainTab | 'gullyRulz' | 'admin') => {
+  const setActiveTab = (tab: AppTab) => {
     setActiveTabState(tab);
     if (tab === 'record' || tab === 'timeline' || tab === 'stats' || tab === 'info') {
       SecureStorage.setItem(STORAGE_KEYS.APP_ACTIVE_TAB, tab);
     }
   };
 
+  /** Landing = pick / join match (no match in context). */
+  const handleGoHome = () => {
+    setActiveTab('record');
+    setMatchId(null);
+  };
+
+  const handleOpenGullyRulz = () => {
+    setActiveTab('gullyRulz');
+  };
+
+  const handleOpenAdmin = () => {
+    setActiveTab('admin');
+  };
+
+  useLayoutEffect(() => {
+    if (didInitFromHash.current) return;
+    didInitFromHash.current = true;
+    const p = parseAppHash();
+    if (p.kind === 'admin') {
+      setActiveTabState('admin');
+      return;
+    }
+    if (p.kind === 'gullyRulz') {
+      setActiveTabState('gullyRulz');
+      return;
+    }
+    if (p.kind === 'match' && p.matchId === matchId) {
+      setActiveTabState(p.tab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time hydration from window.location.hash
+  }, []);
+
   useEffect(() => {
     if (matchId && !prevMatchId.current) {
-      setActiveTabState(readStoredMainTab());
+      const p = parseAppHash();
+      if (p.kind !== 'match' || p.matchId !== matchId) {
+        setActiveTabState(readStoredMainTab());
+      }
     }
     if (!matchId) {
       try {
@@ -54,33 +90,64 @@ function AppContent() {
     prevMatchId.current = matchId;
   }, [matchId]);
 
-  const handleOpenGullyRulz = () => {
-    setActiveTab('gullyRulz');
-  };
+  useEffect(() => {
+    const next = hashFromAppState(matchId, activeTab);
+    if (typeof window === 'undefined' || window.location.hash === next) return;
+    skipHashEvent.current = true;
+    window.location.hash = next;
+  }, [matchId, activeTab]);
 
-  const handleGoHome = () => {
-    setActiveTab('record');
-    setMatchId(null);
-  };
+  useEffect(() => {
+    const onHashChange = () => {
+      if (skipHashEvent.current) {
+        skipHashEvent.current = false;
+        return;
+      }
+      const p = parseAppHash();
+      if (p.kind === 'admin') {
+        setActiveTabState('admin');
+        return;
+      }
+      if (p.kind === 'gullyRulz') {
+        setActiveTabState('gullyRulz');
+        return;
+      }
+      if (p.kind === 'match' && matchId && p.matchId === matchId) {
+        setActiveTabState(p.tab);
+        return;
+      }
+      if (p.kind === 'landing') {
+        setMatchId(null);
+        setActiveTabState('record');
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [matchId, setMatchId]);
 
-  const handleOpenAdmin = () => {
-    setActiveTab('admin');
-  };
-
-  const handleCloseAdmin = () => {
-    setActiveTab(readStoredMainTab());
-  };
+  const navHighlight: NavHighlight = useMemo(() => {
+    if (activeTab === 'admin') return 'admin';
+    if (activeTab === 'gullyRulz') return 'gullyRulz';
+    if (!matchId) return 'home';
+    if (activeTab === 'record') return 'home';
+    return 'none';
+  }, [activeTab, matchId]);
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
-      <Header onHome={handleGoHome} onOpenAdmin={handleOpenAdmin} />
-      <div className="pt-16 flex-1">
+      <Header
+        highlight={navHighlight}
+        onHome={handleGoHome}
+        onOpenGullyRulz={handleOpenGullyRulz}
+        onOpenAdmin={handleOpenAdmin}
+      />
+      <div className="pt-16 flex-1 flex flex-col min-h-0">
         {activeTab === 'admin' ? (
-          <AdminDashboard onClose={handleCloseAdmin} />
+          <AdminDashboard />
         ) : activeTab === 'gullyRulz' ? (
           <GullyRulz />
         ) : !matchId ? (
-          <MatchSelector onOpenGullyRulz={handleOpenGullyRulz} />
+          <MatchSelector />
         ) : (
           <>
             {activeTab === 'record' && <Record />}
@@ -93,11 +160,7 @@ function AppContent() {
       {activeTab !== 'admin' && activeTab !== 'gullyRulz' && (
         <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
       )}
-      <Footer
-        bottomInsetForNav={
-          Boolean(matchId) && activeTab !== 'admin' && activeTab !== 'gullyRulz'
-        }
-      />
+      <Footer />
     </div>
   );
 }
