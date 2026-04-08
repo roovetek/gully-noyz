@@ -1,17 +1,17 @@
 import { Info } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
+import { MatchHeaderSummary } from './MatchHeaderSummary';
+import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
 import { useEffect, useState } from 'react';
 import { getEffectiveRules } from '../lib/rulesEngine';
 import { MatchRules } from '../lib/types';
-import { supabase } from '../lib/supabase';
 import { resetMatchCredentials } from '../lib/globalAdmin';
 import { SecureStorage } from '../lib/security';
 import { STORAGE_KEYS } from '../lib/constants';
 
 export function MatchInfo() {
-  const { matchId, matchName } = useMatch();
+  const { matchId } = useMatch();
   const [rules, setRules] = useState<MatchRules | null>(null);
-  const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [newSecret, setNewSecret] = useState('');
   const [newUmpirePasscode, setNewUmpirePasscode] = useState('');
@@ -25,12 +25,6 @@ export function MatchInfo() {
       if (matchId) {
         const effectiveRules = await getEffectiveRules(matchId);
         setRules(effectiveRules);
-        const { data } = await supabase
-          .from('matches')
-          .select('created_at')
-          .eq('match_id', matchId)
-          .maybeSingle();
-        setCreatedAt(data?.created_at ?? null);
       }
     }
     fetchMatchRules();
@@ -93,20 +87,13 @@ export function MatchInfo() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
-          <div className="text-sm text-gray-400 uppercase tracking-[0.2em] mb-2">Current Match</div>
-          <div className="text-2xl font-bold text-white">{matchName || 'Unnamed Match'}</div>
-          <div className="mt-2 text-sm text-gray-400">
-            Match ID: <span className="font-mono text-yellow-400">{matchId}</span>
-          </div>
-          {createdAt && (
-            <div className="mt-1 text-sm text-gray-400">
-              Match Date: <span className="text-white">{new Date(createdAt).toLocaleString()}</span>
-            </div>
-          )}
-        </div>
+      {matchId && (
+        <MatchPageSummaryStrip>
+          <MatchHeaderSummary variant="solid" showNameEdit={false} />
+        </MatchPageSummaryStrip>
+      )}
 
+      <div className="p-4 space-y-4">
         {rules ? (
           <div className="space-y-4">
             <div className="rounded-2xl border border-red-700 bg-gray-900 p-5 space-y-4">

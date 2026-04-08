@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
+import { MatchHeaderSummary } from './MatchHeaderSummary';
+import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
 import { supabase, Clip } from '../lib/supabase';
 import { getTestDataFilter } from '../lib/testDataFilter';
 import { calculateInningsOversDisplay } from '../lib/match';
@@ -30,7 +32,7 @@ const isWicketBall = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) =>
   clip.outcome === 'wicket' || clip.dismissal_type !== null;
 
 export function MatchStats() {
-  const { matchId, matchName } = useMatch();
+  const { matchId } = useMatch();
   const [innings1Summary, setInnings1Summary] = useState<InningsSummary | null>(null);
   const [innings2Summary, setInnings2Summary] = useState<InningsSummary | null>(null);
   const [expandedInnings, setExpandedInnings] = useState<number | null>(null);
@@ -187,10 +189,15 @@ export function MatchStats() {
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading match stats...</p>
+      <div className="min-h-[calc(100vh-4rem)] bg-black text-white flex flex-col">
+        <MatchPageSummaryStrip>
+          <MatchHeaderSummary variant="solid" showNameEdit />
+        </MatchPageSummaryStrip>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading match stats...</p>
+          </div>
         </div>
       </div>
     );
@@ -199,52 +206,22 @@ export function MatchStats() {
   const summaries = [innings2Summary, innings1Summary].filter(Boolean) as InningsSummary[];
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
-      <div className="p-4 mb-4 bg-gray-900 border-b border-gray-800">
-        <div className="flex items-center justify-center mb-4">
-          <div className="bg-gray-900 px-4 py-2 rounded-lg border border-yellow-400">
-            <div>
-              {matchName && (
-                <div className="text-white font-bold text-sm">{matchName}</div>
-              )}
-              <div className="text-xs">
-                <span className="text-gray-400">ID: </span>
-                <span className="text-yellow-400 font-mono font-bold">{matchId}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-black text-white pb-20 flex flex-col">
+      <MatchPageSummaryStrip>
+        <MatchHeaderSummary variant="solid" showNameEdit />
+      </MatchPageSummaryStrip>
 
+      <div className="px-4 pt-4 pb-2 bg-gray-900 border-b border-gray-800">
         <h1 className="text-2xl font-bold text-center text-green-400">Match Stats</h1>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 flex-1">
         {summaries.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">No match data available</p>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
-              <h2 className="text-xl font-bold mb-3 text-gray-300">Match Summary</h2>
-              <div className="grid grid-cols-2 gap-4">
-                {innings1Summary && (
-                  <div className="bg-gray-800 rounded-lg p-3 border border-orange-400">
-                    <div className="text-orange-400 text-sm font-bold mb-2">Innings 1</div>
-                    <div className="text-white text-2xl font-bold">{innings1Summary.totalRuns}/{innings1Summary.totalWickets}</div>
-                    <div className="text-gray-400 text-sm">Overs: {innings1Summary.totalOvers}</div>
-                  </div>
-                )}
-                {innings2Summary && (
-                  <div className="bg-gray-800 rounded-lg p-3 border border-orange-400">
-                    <div className="text-orange-400 text-sm font-bold mb-2">Innings 2</div>
-                    <div className="text-white text-2xl font-bold">{innings2Summary.totalRuns}/{innings2Summary.totalWickets}</div>
-                    <div className="text-gray-400 text-sm">Overs: {innings2Summary.totalOvers}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-
             <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
               <h2 className="text-xl font-bold mb-3 text-gray-300">Match Details</h2>
               <div className="space-y-3">
