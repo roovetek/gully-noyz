@@ -12,6 +12,8 @@ interface MatchContextType {
   setMatchName: (name: string) => void;
   setUserRole: (role: UserRole) => void;
   generateMatchId: () => string;
+  getMatchId: () => string;
+  getMatchName: () => string;
 }
 
 const MatchContext = createContext<MatchContextType | undefined>(undefined);
@@ -47,8 +49,16 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     setUserRoleState(role);
   };
 
+  const getMatchId = () => {
+    return matchId || '';
+  };
+
+  const getMatchName = () => {
+    return matchName;
+  };
+
   return (
-    <MatchContext.Provider value={{ matchId, matchName, userRole, setMatchId, setMatchName, setUserRole, generateMatchId }}>
+    <MatchContext.Provider value={{ matchId, matchName, userRole, setMatchId, setMatchName, setUserRole, generateMatchId, getMatchId, getMatchName }}>
       {children}
     </MatchContext.Provider>
   );
