@@ -33,23 +33,27 @@ export function Header({ highlight, onHome, onOpenGullyRulz, onOpenAdmin }: Head
           <button
             type="button"
             onClick={onOpenGullyRulz}
-            className={`flex items-center gap-2 transition-colors ${
-              isRulz ? 'text-blue-400' : 'text-gray-500 hover:text-blue-300'
-            }`}
+            className="group flex items-center gap-2 text-blue-400 transition-colors"
           >
-            <BookOpen size={20} />
-            <span className="text-sm font-semibold">Gully Rulz</span>
+            <BookOpen size={20} className="shrink-0" />
+            <span
+              className={`text-sm ${isRulz ? 'font-bold' : 'font-semibold group-hover:font-bold'}`}
+            >
+              Gully Rulz
+            </span>
           </button>
 
           <button
             type="button"
             onClick={onOpenAdmin}
-            className={`flex items-center gap-2 transition-colors ${
-              isAdmin ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-300'
-            }`}
+            className="group flex items-center gap-2 text-yellow-400 transition-colors"
           >
-            <ShieldCheck size={20} />
-            <span className="text-sm font-semibold">Dashboard</span>
+            <ShieldCheck size={20} className="shrink-0" />
+            <span
+              className={`text-sm ${isAdmin ? 'font-bold' : 'font-semibold group-hover:font-bold'}`}
+            >
+              Dashboard
+            </span>
           </button>
         </div>
       </div>
