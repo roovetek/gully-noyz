@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Settings, Save, AlertCircle, CheckCircle, X, Trash2, List, Activity, Lock } from 'lucide-react';
 import { DEFAULT_GLOBAL_RULES, getGlobalRules, updateGlobalRules } from '../lib/rulesEngine';
-import { validateAdminAccess } from '../lib/accessControl';
+import { validateGlobalAdminPasscodeResult } from '../lib/globalAdmin';
 import { changeGlobalAdminPasscode } from '../lib/globalAdmin';
 import { MatchRules } from '../lib/types';
 import { supabase } from '../lib/supabase';
@@ -62,7 +62,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
 
   const handleAuth = async () => {
     if (!passcode.trim()) {
-      setAuthError('Please enter your dashboard admin passcode');
+      setAuthError('Please enter your Admin Console passcode');
       return;
     }
 
@@ -70,15 +70,19 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     setAuthError('');
 
     try {
-      const isValid = await validateAdminAccess(passcode);
-      if (isValid) {
+      const result = await validateGlobalAdminPasscodeResult(passcode);
+      if (result.ok) {
         setAdminSessionSecret(passcode.trim());
         setIsAuthenticated(true);
+      } else if (result.kind === 'server') {
+        setAuthError(
+          `Cannot reach admin services: ${result.message}. Check your Supabase URL and anon key in .env.local, then restart the dev server.`
+        );
       } else {
-        setAuthError('Invalid dashboard passcode');
+        setAuthError('Invalid Admin Console passcode');
       }
-    } catch {
-      setAuthError('Authentication failed');
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -186,7 +190,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
       setDashPwFeedback({ type: 'err', text: result.message });
       return;
     }
-    setDashPwFeedback({ type: 'ok', text: 'Dashboard password updated.' });
+    setDashPwFeedback({ type: 'ok', text: 'Admin Console password updated.' });
     setAdminSessionSecret(dashPwNew.trim());
     setDashPwCurrent('');
     setDashPwNew('');
@@ -199,13 +203,13 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
         <div className="w-full max-w-md bg-white rounded-lg shadow-xl">
           <div className="flex items-center gap-3 p-6 border-b">
             <Settings className="text-gray-700" size={24} />
-            <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Admin Console</h2>
           </div>
 
           <div className="p-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dashboard passcode
+                Enter Admin Password
               </label>
               <input
                 type="password"
@@ -215,7 +219,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                   setAuthError('');
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
-                placeholder="Enter dashboard passcode"
+                placeholder="Enter Admin Password"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 autoFocus
               />
@@ -253,7 +257,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     <div className="min-h-[calc(100vh-4rem)] bg-white text-gray-900">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-gray-50">
         <Settings className="text-gray-700" size={24} />
-        <h2 className="text-xl font-semibold text-gray-900">Dashboard</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Admin Console</h2>
       </div>
 
         <div className="p-6 space-y-6">
@@ -311,7 +315,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
             >
               <span className="inline-flex items-center gap-2">
                 <Lock size={16} />
-                Admin password
+                Change Password
               </span>
             </button>
           </div>
@@ -593,10 +597,10 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
             <div className="border border-gray-200 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2 text-gray-900 font-semibold">
                 <Lock size={18} className="text-gray-600" />
-                Change dashboard password
+                Change Password
               </div>
               <p className="text-xs text-gray-500">
-                This only affects dashboard admin access (this screen).
+                This only affects Admin Console access (this screen).
               </p>
               <div className="space-y-3 max-w-md">
                 <div>
@@ -659,7 +663,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                 }
                 className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 disabled:opacity-50"
               >
-                {dashPwSaving ? 'Updating…' : 'Update dashboard password'}
+                {dashPwSaving ? 'Updating…' : 'Update Password'}
               </button>
             </div>
           )}

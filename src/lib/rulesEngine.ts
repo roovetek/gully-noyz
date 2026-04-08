@@ -54,7 +54,7 @@ export async function updateGlobalRules(
 ): Promise<void> {
   const pass = adminPasscode.trim();
   if (!pass) {
-    throw new Error('Dashboard passcode is required to update global rules.');
+    throw new Error('Admin Console passcode is required to update global rules.');
   }
 
   const { data, error } = await executeTrackedAction({

@@ -240,7 +240,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Match authority (not the dashboard admin). Used to verify umpire actions during the match.
+              Match authority (not the Admin Console). Used to verify umpire actions during the match.
             </p>
           </div>
 

@@ -115,11 +115,11 @@ export function MatchInfo() {
                 Replaces the <strong className="text-white">private match secret</strong>,{' '}
                 <strong className="text-white">umpire passcode</strong>, and{' '}
                 <strong className="text-white">scorer passcode</strong> in one step. Everyone must use the new values
-                after this. Requires your <strong className="text-white">dashboard admin</strong> passcode.
+                after this. Requires your <strong className="text-white">Admin Console</strong> passcode.
               </p>
               <div className="space-y-4 max-w-lg">
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Dashboard admin passcode</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Admin Console passcode</label>
                   <input
                     type="password"
                     value={adminPasscode}

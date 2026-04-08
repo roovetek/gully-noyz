@@ -1,4 +1,4 @@
-import { Home, BookOpen, ShieldCheck } from 'lucide-react';
+import { Home, BookOpen } from 'lucide-react';
 
 export type NavHighlight = 'home' | 'gullyRulz' | 'admin' | 'none';
 
@@ -7,55 +7,36 @@ interface HeaderProps {
   highlight: NavHighlight;
   onHome: () => void;
   onOpenGullyRulz: () => void;
-  onOpenAdmin: () => void;
 }
 
-export function Header({ highlight, onHome, onOpenGullyRulz, onOpenAdmin }: HeaderProps) {
+/** Home: always green (same idea as Gully Rulz always blue); weight shows active route. */
+const homeNavClass = (active: boolean) =>
+  `flex items-center gap-2 text-sm text-green-400 transition-colors ${
+    active ? 'font-bold' : 'font-semibold hover:font-bold'
+  }`;
+
+/** Gully Rulz: always blue (distinct from Home green). */
+const gullyRulzNavClass = (active: boolean) =>
+  `flex items-center gap-2 text-sm text-blue-400 transition-colors ${
+    active ? 'font-bold' : 'font-semibold hover:font-bold'
+  }`;
+
+export function Header({ highlight, onHome, onOpenGullyRulz }: HeaderProps) {
   const isHome = highlight === 'home';
   const isRulz = highlight === 'gullyRulz';
-  const isAdmin = highlight === 'admin';
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 flex h-16 items-center bg-gray-900 border-b border-gray-800">
-      <div className="flex w-full items-center justify-between px-4">
-        <button
-          type="button"
-          onClick={onHome}
-          className={`flex items-center gap-2 transition-colors ${
-            isHome ? 'text-green-400' : 'text-gray-500 hover:text-green-300'
-          }`}
-        >
-          <Home size={20} />
-          <span className="text-sm font-semibold">Home</span>
+      <div className="flex w-full items-center gap-8 px-4">
+        <button type="button" onClick={onHome} className={homeNavClass(isHome)}>
+          <Home size={20} className="shrink-0" />
+          <span>Home</span>
         </button>
 
-        <div className="flex items-center gap-5">
-          <button
-            type="button"
-            onClick={onOpenGullyRulz}
-            className="group flex items-center gap-2 text-blue-400 transition-colors"
-          >
-            <BookOpen size={20} className="shrink-0" />
-            <span
-              className={`text-sm ${isRulz ? 'font-bold' : 'font-semibold group-hover:font-bold'}`}
-            >
-              Gully Rulz
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenAdmin}
-            className="group flex items-center gap-2 text-yellow-400 transition-colors"
-          >
-            <ShieldCheck size={20} className="shrink-0" />
-            <span
-              className={`text-sm ${isAdmin ? 'font-bold' : 'font-semibold group-hover:font-bold'}`}
-            >
-              Dashboard
-            </span>
-          </button>
-        </div>
+        <button type="button" onClick={onOpenGullyRulz} className={gullyRulzNavClass(isRulz)}>
+          <BookOpen size={20} className="shrink-0" />
+          <span>Gully Rulz</span>
+        </button>
       </div>
     </header>
   );

@@ -1,19 +1,6 @@
-import { useEffect, useState } from 'react';
-import { getGlobalRules } from '../lib/rulesEngine';
 import { Info } from 'lucide-react';
-import { MatchRules } from '../lib/types';
 
 export function GullyRulz() {
-  const [rules, setRules] = useState<MatchRules | null>(null);
-
-  useEffect(() => {
-    async function fetchRules() {
-      const fetchedRules = await getGlobalRules();
-      setRules(fetchedRules);
-    }
-    fetchRules();
-  }, []);
-
   return (
     <div className="min-h-screen bg-black text-white pb-20">
       <div className="p-4 bg-gray-900 border-b border-gray-800">
@@ -21,9 +8,7 @@ export function GullyRulz() {
           <Info size={24} className="text-blue-400 shrink-0" />
           <div>
             <h1 className="text-2xl font-bold text-white">Gully Rulz</h1>
-            <p className="text-sm text-gray-400">
-              How to use the app and default rules for this server.
-            </p>
+            <p className="text-sm text-gray-400">Tips for using GullyStream</p>
           </div>
         </div>
       </div>
@@ -49,9 +34,9 @@ export function GullyRulz() {
             <ul className="mt-2 list-disc list-inside space-y-2 text-sm text-gray-300 leading-relaxed">
               <li>
                 Tap <strong className="text-gray-200">Create</strong>, give the game a name, and set an{' '}
-                <strong className="text-gray-200">umpire passcode</strong> (at least four characters). That
-                passcode is not the Dashboard admin password—it is only for this match, and the umpire uses it
-                when the app asks for authority during play (for example when an over finishes).
+                <strong className="text-gray-200">umpire passcode</strong> (at least four characters). It is
+                only for this match—the umpire uses it when the app asks for authority during play (for example
+                when an over finishes).
               </li>
               <li>
                 Leave the match <strong className="text-gray-200">public</strong> if anyone with the match ID
@@ -61,8 +46,11 @@ export function GullyRulz() {
                 match—share it safely with your group).
               </li>
               <li>
-                You can optionally adjust match rules while creating if your game does not use the defaults
-                listed below on this server.
+                <strong className="text-gray-200">Match rules</strong> are fixed when the match is created:
+                overs, wickets, how extras affect runs, and similar. Tap{' '}
+                <strong className="text-gray-200">Customize</strong> under{' '}
+                <strong className="text-gray-200">Match Rules</strong> to set overs per innings, balls per
+                over, max wickets, max overs per bowler, and extras-related options for that game.
               </li>
             </ul>
           </div>
@@ -95,8 +83,8 @@ export function GullyRulz() {
                 far.
               </li>
               <li>
-                <strong className="text-gray-200">Config</strong> — Match details, effective rules, and
-                advanced options for this game (for example credential resets where available).
+                <strong className="text-gray-200">Config</strong> — Match details, effective rules, and other
+                options for this game.
               </li>
             </ul>
           </div>
@@ -111,56 +99,7 @@ export function GullyRulz() {
               Plan ahead: only people who should control that step should know the umpire passcode.
             </p>
           </div>
-
-          <div>
-            <h3 className="text-lg font-semibold text-white">This page vs Dashboard</h3>
-            <p className="mt-2 text-sm text-gray-300 leading-relaxed">
-              <strong className="text-gray-200">Gully Rulz</strong> (this screen) shows the{' '}
-              <strong className="text-gray-200">default sport rules</strong> configured for this server—what new
-              matches inherit unless you customize them at creation.
-            </p>
-            <p className="mt-2 text-sm text-gray-300 leading-relaxed">
-              <strong className="text-gray-200">Dashboard</strong> in the header is for{' '}
-              <strong className="text-gray-200">operators and admins</strong>: global app settings (separate from
-              your per-match umpire passcode). Use Dashboard only if you have been given that access.
-            </p>
-          </div>
         </section>
-
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-white px-1">Default rules on this server</h2>
-          {rules ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
-                <h3 className="text-xl font-bold text-white">Overs and Balls</h3>
-                <p className="text-sm text-gray-400">Overs per innings: {rules.overs_per_innings}</p>
-                <p className="text-sm text-gray-400">Balls per over: {rules.balls_per_over}</p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
-                <h3 className="text-xl font-bold text-white">Wickets and Bowlers</h3>
-                <p className="text-sm text-gray-400">Max wickets: {rules.max_wickets}</p>
-                <p className="text-sm text-gray-400">Max overs per bowler: {rules.max_overs_per_bowler}</p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
-                <h3 className="text-xl font-bold text-white">Extras</h3>
-                <p className="text-sm text-gray-400">Wides contribute runs: {rules.wide_no_runs ? 'Yes' : 'No'}</p>
-                <p className="text-sm text-gray-400">Wides count as balls: {rules.wide_no_ball_count ? 'Yes' : 'No'}</p>
-                <p className="text-sm text-gray-400">Leg-byes contribute runs: {rules.legbye_no_runs ? 'Yes' : 'No'}</p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
-                <h3 className="text-xl font-bold text-white">Other Rules</h3>
-                <p className="text-sm text-gray-400">
-                  Consecutive overs required: {rules.consecutive_overs_required ? 'Yes' : 'No'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-400 text-sm px-1">Loading rules…</p>
-          )}
-        </div>
       </div>
     </div>
   );

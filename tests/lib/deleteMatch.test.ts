@@ -57,12 +57,12 @@ describe('deleteMatch', () => {
 
   it('returns error when RPC reports failure', async () => {
     hoisted.rpc.mockResolvedValue({
-      data: { ok: false, error: 'Invalid dashboard passcode.' },
+      data: { ok: false, error: 'Invalid Admin Console passcode.' },
       error: null,
     });
     const r = await deleteMatch('XY34ZZ', 'wrong');
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.message).toContain('Invalid dashboard passcode');
+    if (!r.ok) expect(r.message).toContain('Invalid Admin Console passcode');
   });
 
   it('returns error when PostgREST errors', async () => {

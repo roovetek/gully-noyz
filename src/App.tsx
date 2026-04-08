@@ -48,10 +48,6 @@ function AppContent() {
     setActiveTab('gullyRulz');
   };
 
-  const handleOpenAdmin = () => {
-    setActiveTab('admin');
-  };
-
   useLayoutEffect(() => {
     if (didInitFromHash.current) return;
     didInitFromHash.current = true;
@@ -139,7 +135,6 @@ function AppContent() {
         highlight={navHighlight}
         onHome={handleGoHome}
         onOpenGullyRulz={handleOpenGullyRulz}
-        onOpenAdmin={handleOpenAdmin}
       />
       <div className="pt-16 flex-1 flex flex-col min-h-0">
         {activeTab === 'admin' ? (

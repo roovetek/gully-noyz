@@ -2,26 +2,44 @@ import { executeTrackedAction, supabase } from './supabase';
 
 const LEGACY_LS_KEY = 'admin_passcode_hash';
 
-async function rpcConfigured(): Promise<boolean> {
+type ConfigStatus =
+  | { ok: true; configured: boolean }
+  | { ok: false; message: string };
+
+async function getGlobalAdminConfigured(): Promise<ConfigStatus> {
   const { data, error } = await supabase.rpc('is_global_admin_password_configured');
   if (error) {
     console.error('is_global_admin_password_configured failed', error);
-    return false;
+    return { ok: false, message: error.message };
   }
-  return Boolean(data);
+  return { ok: true, configured: Boolean(data) };
 }
+
+export type ValidateGlobalAdminPasscodeResult =
+  | { ok: true }
+  | { ok: false; kind: 'invalid' }
+  | { ok: false; kind: 'server'; message: string };
 
 /**
  * Dashboard (global) admin login. If no hash exists yet, the first successful passcode is stored.
  * Migrates legacy localStorage `admin_passcode_hash` into `app_settings` when DB hash is null.
  */
-export async function validateGlobalAdminPasscode(passcode: string): Promise<boolean> {
+export async function validateGlobalAdminPasscodeResult(
+  passcode: string
+): Promise<ValidateGlobalAdminPasscodeResult> {
   const trimmed = passcode.trim();
-  if (!trimmed) return false;
+  if (!trimmed) {
+    return { ok: false, kind: 'invalid' };
+  }
+
+  let status = await getGlobalAdminConfigured();
+  if (!status.ok) {
+    return { ok: false, kind: 'server', message: status.message };
+  }
 
   if (typeof window !== 'undefined') {
     const legacy = localStorage.getItem(LEGACY_LS_KEY);
-    if (legacy && !(await rpcConfigured())) {
+    if (legacy && !status.configured) {
       const { data: migrated, error } = await executeTrackedAction({
         tableName: 'rpc',
         action: 'migrate_legacy_dashboard_hash',
@@ -42,9 +60,12 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
     }
   }
 
-  const configured = await rpcConfigured();
+  status = await getGlobalAdminConfigured();
+  if (!status.ok) {
+    return { ok: false, kind: 'server', message: status.message };
+  }
 
-  if (!configured) {
+  if (!status.configured) {
     const { data, error } = await executeTrackedAction({
       tableName: 'rpc',
       action: 'bootstrap_global_admin_passcode',
@@ -57,18 +78,18 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
     });
     if (error) {
       console.error('bootstrap_global_admin_passcode failed', error);
-      return false;
+      return { ok: false, kind: 'server', message: error.message };
     }
     const row = data as { ok?: boolean } | null;
-    const ok = Boolean(row?.ok);
-    if (ok && typeof window !== 'undefined') {
+    const bootOk = Boolean(row?.ok);
+    if (bootOk && typeof window !== 'undefined') {
       try {
         localStorage.removeItem(LEGACY_LS_KEY);
       } catch {
         /* ignore */
       }
     }
-    return ok;
+    return bootOk ? { ok: true } : { ok: false, kind: 'invalid' };
   }
 
   const { data: valid, error: verifyError } = await executeTrackedAction({
@@ -83,7 +104,7 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
   });
   if (verifyError) {
     console.error('verify_global_admin_passcode failed', verifyError);
-    return false;
+    return { ok: false, kind: 'server', message: verifyError.message };
   }
   if (valid && typeof window !== 'undefined') {
     try {
@@ -92,7 +113,12 @@ export async function validateGlobalAdminPasscode(passcode: string): Promise<boo
       /* ignore */
     }
   }
-  return Boolean(valid);
+  return Boolean(valid) ? { ok: true } : { ok: false, kind: 'invalid' };
+}
+
+export async function validateGlobalAdminPasscode(passcode: string): Promise<boolean> {
+  const r = await validateGlobalAdminPasscodeResult(passcode);
+  return r.ok === true;
 }
 
 export async function changeGlobalAdminPasscode(

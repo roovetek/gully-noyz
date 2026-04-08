@@ -57,7 +57,7 @@ async function cleanupMatchStorage(matchId: string): Promise<CleanupOutcome> {
 
 /**
  * Permanently removes a match and attempts best-effort clip storage cleanup first.
- * Requires dashboard passcode; enforced server-side via admin_delete_match RPC.
+ * Requires Admin Console passcode; enforced server-side via admin_delete_match RPC.
  */
 export async function deleteMatch(matchId: string, adminPasscode: string): Promise<DeleteMatchResult> {
   const trimmed = matchId.trim();
@@ -66,7 +66,7 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
   }
   const pass = adminPasscode.trim();
   if (!pass) {
-    return { ok: false, message: 'Dashboard passcode is required.' };
+    return { ok: false, message: 'Admin Console passcode is required.' };
   }
 
   const verifyResult = await executeTrackedAction({
@@ -85,7 +85,7 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
     return { ok: false, message: verifyError.message };
   }
   if (!isValidPasscode) {
-    return { ok: false, message: 'Invalid dashboard passcode.' };
+    return { ok: false, message: 'Invalid Admin Console passcode.' };
   }
 
   await executeTrackedAction({
