@@ -56,13 +56,6 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-        },
-      },
-    },
     minify: true,
     sourcemap: true,
     assetsDir: 'assets',

@@ -1,6 +1,8 @@
 import { executeTrackedAction, supabase } from './supabase';
 import { MatchAccessRole } from './types';
 import { validateGlobalAdminPasscode } from './globalAdmin';
+import { logger } from './logger';
+import { userFriendlyMessage } from './userFriendlyError';
 
 export async function validateRole(
   matchId: string,
@@ -57,11 +59,19 @@ export async function createMatchAccess(
   });
 
   if (error) {
-    throw new Error(`Failed to create match access: ${error.message}`);
+    logger.error('create_match_access RPC failed', error);
+    throw new Error(
+      userFriendlyMessage(error, { fallback: 'Could not set up match access. Please try again.' })
+    );
   }
   const result = data as { ok?: boolean; error?: string } | null;
   if (!result?.ok) {
-    throw new Error(result?.error || 'Failed to create match access.');
+    logger.error('create_match_access rejected', result);
+    throw new Error(
+      userFriendlyMessage(typeof result?.error === 'string' ? result.error : result, {
+        fallback: 'Could not set up match access. Please try again.',
+      })
+    );
   }
 }
 

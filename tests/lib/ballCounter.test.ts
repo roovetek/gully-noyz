@@ -5,11 +5,16 @@ import {
   getOverBallDisplay,
   calculateOverNumber,
   calculateBallInOver,
+  resolveBallScoring,
 } from '../../src/lib/ballCounter';
 import { MatchRules } from '../../src/lib/types';
 
 describe('ballCounter', () => {
   const defaultRules: MatchRules = {
+    overs_per_innings: 20,
+    balls_per_over: 6,
+    max_wickets: 10,
+    max_overs_per_bowler: 4,
     wide_no_ball_count: false,
     wide_no_runs: false,
     legbye_no_runs: false,
@@ -70,6 +75,13 @@ describe('ballCounter', () => {
       const result = calculateRuns('legbye', 0, 2, rules);
       expect(result.totalRuns).toBe(0);
       expect(result.effectiveExtraRuns).toBe(0);
+    });
+
+    it('should keep no-ball runs and mark invalid delivery', () => {
+      const result = resolveBallScoring('noball', defaultRules, 0, 2);
+      expect(result.totalRuns).toBe(2);
+      expect(result.effectiveExtraRuns).toBe(2);
+      expect(result.validBall).toBe(false);
     });
   });
 

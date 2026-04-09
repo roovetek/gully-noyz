@@ -4,6 +4,9 @@ import { executeTrackedAction, supabase } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { SecretPrompt } from './SecretPrompt';
 import { getTestDataFilter } from '../lib/testDataFilter';
+import { calculateMatchStats } from '../lib/match';
+import { logger } from '../lib/logger';
+import { userFriendlyMessage } from '../lib/userFriendlyError';
 
 interface MatchInfo {
   match_id: string;
@@ -26,9 +29,6 @@ interface MatchInfo {
   is_completed: boolean;
 }
 
-const isWicketBall = (clip: { outcome: string; dismissal_type?: string | null }) =>
-  clip.outcome === 'wicket' || clip.dismissal_type != null;
-
 interface MatchListProps {
   onBack: () => void;
 }
@@ -45,6 +45,7 @@ export function MatchList({ onBack }: MatchListProps) {
   const [pendingMatch, setPendingMatch] = useState<{ id: string; name: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<'join' | 'rename' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editSaveError, setEditSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMatches();
@@ -132,24 +133,10 @@ export function MatchList({ onBack }: MatchListProps) {
       const innings1Clips = clipInfo.clips.filter(c => c.innings_number === 1);
       const innings2Clips = clipInfo.clips.filter(c => c.innings_number === 2);
 
-      const calculateInningsStats = (clips: any[], ballsPerOver: number) => {
+      const calculateInningsStats = (clips: Array<{ outcome: string; extra_runs?: number; dismissal_type?: string | null; is_valid_ball?: boolean }>, ballsPerOver: number) => {
         if (clips.length === 0) return { runs: 0, wickets: 0, overs: '0' };
-
-        const totalRuns = clips.reduce((sum, clip) => {
-          const runs = parseInt(clip.outcome);
-          return sum + (isNaN(runs) ? 0 : runs);
-        }, 0);
-
-        const totalWickets = clips.filter(isWicketBall).length;
-
-        const uniqueOvers = new Set(clips.map(c => c.over_number));
-        const maxOver = Math.max(...Array.from(uniqueOvers));
-        const ballsInLastOver = clips.filter(c => c.over_number === maxOver).length;
-        const completedOvers = ballsInLastOver === ballsPerOver ? maxOver : maxOver - 1;
-        const remainingBalls = ballsInLastOver === ballsPerOver ? 0 : ballsInLastOver;
-        const totalOvers = remainingBalls === 0 ? completedOvers.toString() : `${completedOvers}.${remainingBalls}`;
-
-        return { runs: totalRuns, wickets: totalWickets, overs: totalOvers };
+        const stats = calculateMatchStats(clips, ballsPerOver);
+        return { runs: stats.totalRuns, wickets: stats.totalWickets, overs: stats.currentOvers };
       };
 
       const innings1Stats = calculateInningsStats(innings1Clips, match.balls_per_over);
@@ -158,6 +145,9 @@ export function MatchList({ onBack }: MatchListProps) {
       const allClips = clipInfo.clips.sort((a, b) => {
         if (a.innings_number !== b.innings_number) return b.innings_number - a.innings_number;
         if (a.over_number !== b.over_number) return b.over_number - a.over_number;
+        if ((a.delivery_index ?? a.ball_number) !== (b.delivery_index ?? b.ball_number)) {
+          return (b.delivery_index ?? b.ball_number) - (a.delivery_index ?? a.ball_number);
+        }
         return b.ball_number - a.ball_number;
       });
 
@@ -241,6 +231,7 @@ export function MatchList({ onBack }: MatchListProps) {
     setNewName(match.name);
     setNewTotalOvers(Math.round(match.total_overs / 2));
     setNewBallsPerOver(match.balls_per_over);
+    setEditSaveError(null);
   };
 
   const handleSaveEdit = async (matchId: string) => {
@@ -273,9 +264,13 @@ export function MatchList({ onBack }: MatchListProps) {
 
       setEditingMatch(null);
       setNewName('');
+      setEditSaveError(null);
       fetchMatches();
     } catch (err) {
-      console.error('Error updating match:', err);
+      logger.error('Error updating match', err);
+      setEditSaveError(
+        userFriendlyMessage(err, { fallback: 'Could not save changes. Please try again.' })
+      );
     }
   };
 
@@ -413,6 +408,11 @@ export function MatchList({ onBack }: MatchListProps) {
                   )}
                   {editingMatch === match.match_id ? (
                     <div className="flex flex-col gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                      {editSaveError && (
+                        <p className="text-red-400 text-xs" role="alert">
+                          {editSaveError}
+                        </p>
+                      )}
                       <input
                         type="text"
                         value={newName}
@@ -455,6 +455,7 @@ export function MatchList({ onBack }: MatchListProps) {
                             e.stopPropagation();
                             setEditingMatch(null);
                             setNewName('');
+                            setEditSaveError(null);
                           }}
                           className="p-1 bg-gray-700 hover:bg-gray-600 rounded"
                         >

@@ -5,7 +5,9 @@ import { MatchHeaderSummary } from './MatchHeaderSummary';
 import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
 import { supabase, Clip } from '../lib/supabase';
 import { getTestDataFilter } from '../lib/testDataFilter';
-import { calculateInningsOversDisplay } from '../lib/match';
+import { calculateMatchStats } from '../lib/match';
+import { formatDismissalOptionLabel } from '../lib/dismissalOptions';
+import { HighlightsPlayer } from './HighlightsPlayer';
 
 interface InningsSummary {
   inningsNumber: number;
@@ -22,11 +24,7 @@ interface OverData {
   wickets: number;
 }
 
-const formatDismissalLabel = (dismissalType: string) =>
-  dismissalType === 'unknown'
-    ? 'Unknown'
-    :
-  dismissalType.charAt(0).toUpperCase() + dismissalType.slice(1);
+const formatDismissalLabel = (dismissalType: string) => formatDismissalOptionLabel(dismissalType);
 
 const isWicketBall = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) =>
   clip.outcome === 'wicket' || clip.dismissal_type !== null;
@@ -38,7 +36,12 @@ export function MatchStats() {
   const [expandedInnings, setExpandedInnings] = useState<number | null>(null);
   const [expandedOvers, setExpandedOvers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [matchConfig, setMatchConfig] = useState({ ballsPerOver: 6, totalOvers: 20 });
+  const [matchConfig, setMatchConfig] = useState({ ballsPerOver: 6, totalOvers: 20, currentInnings: 1 });
+  const [generatingInnings, setGeneratingInnings] = useState<number | null>(null);
+  const [highlightsError, setHighlightsError] = useState<string | null>(null);
+  const [highlightsUrl, setHighlightsUrl] = useState<string | null>(null);
+  const [highlightsTitle, setHighlightsTitle] = useState('Highlights Reel');
+  const [highlightsOpen, setHighlightsOpen] = useState(false);
 
   const fetchMatchData = useCallback(async () => {
     if (!matchId) return;
@@ -46,7 +49,7 @@ export function MatchStats() {
 
     const { data: matchData } = await supabase
       .from('matches')
-      .select('balls_per_over, total_overs')
+      .select('balls_per_over, total_overs, current_innings')
       .eq('match_id', matchId)
       .maybeSingle();
 
@@ -54,6 +57,7 @@ export function MatchStats() {
       setMatchConfig({
         ballsPerOver: matchData.balls_per_over,
         totalOvers: matchData.total_overs,
+        currentInnings: matchData.current_innings ?? 1,
       });
     }
 
@@ -70,6 +74,7 @@ export function MatchStats() {
     const { data: clips } = await clipsQuery
       .order('innings_number', { ascending: true })
       .order('over_number', { ascending: true })
+      .order('delivery_index', { ascending: true })
       .order('ball_number', { ascending: true });
 
     if (clips) {
@@ -110,20 +115,13 @@ export function MatchStats() {
   }, [matchId, fetchMatchData]);
 
   const calculateInningsSummary = (inningsNumber: number, clips: Clip[], ballsPerOver: number): InningsSummary => {
-    const totalRuns = clips.reduce((sum, clip) => {
-      const runs = parseInt(clip.outcome);
-      return sum + (isNaN(runs) ? 0 : runs);
-    }, 0);
-
-    const totalWickets = clips.filter(isWicketBall).length;
-
-    const totalOvers = calculateInningsOversDisplay(clips, ballsPerOver);
+    const stats = calculateMatchStats(clips, ballsPerOver);
 
     return {
       inningsNumber,
-      totalRuns,
-      totalWickets,
-      totalOvers,
+      totalRuns: stats.totalRuns,
+      totalWickets: stats.totalWickets,
+      totalOvers: stats.currentOvers,
       clips,
     };
   };
@@ -141,8 +139,8 @@ export function MatchStats() {
     return Array.from(oversMap.entries())
       .map(([overNumber, balls]) => {
         const runs = balls.reduce((sum, ball) => {
-          const r = parseInt(ball.outcome);
-          return sum + (isNaN(r) ? 0 : r);
+          const baseRuns = Number.parseInt(ball.outcome, 10);
+          return sum + (Number.isFinite(baseRuns) ? baseRuns : 0) + (ball.extra_runs ?? 0);
         }, 0);
 
         const wickets = balls.filter(isWicketBall).length;
@@ -170,6 +168,9 @@ export function MatchStats() {
   const formatOutcome = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) => {
     const outcome = clip.outcome;
     if (outcome === 'dot') return 'Dot Ball';
+    if (outcome === 'wide') return 'Wide';
+    if (outcome === 'noball') return 'No ball';
+    if (outcome === 'other') return 'Other';
     if (outcome === 'wicket') {
       return clip.dismissal_type ? `Wicket - ${formatDismissalLabel(clip.dismissal_type)}` : 'Wicket';
     }
@@ -185,6 +186,61 @@ export function MatchStats() {
     }
     if (outcome === 'dot') return 'text-gray-400 bg-gray-500/20 border-gray-500';
     return 'text-yellow-400 bg-yellow-500/20 border-yellow-500';
+  };
+
+  const isCompletedInnings = (summary: InningsSummary): boolean => {
+    const validBalls = summary.clips.filter((clip) => clip.is_valid_ball !== false).length;
+    const requiredValidBalls = matchConfig.ballsPerOver * matchConfig.totalOvers;
+    return summary.inningsNumber < matchConfig.currentInnings || validBalls >= requiredValidBalls;
+  };
+
+  const getHighlightCandidates = (summary: InningsSummary): Clip[] => {
+    return summary.clips.filter((clip) => ['4', '6', 'wicket'].includes(clip.outcome));
+  };
+
+  const handleGenerateHighlights = async (summary: InningsSummary) => {
+    if (!matchId) return;
+
+    setHighlightsError(null);
+    setGeneratingInnings(summary.inningsNumber);
+
+    const highlightClipIds = getHighlightCandidates(summary).map((clip) => clip.id);
+    if (highlightClipIds.length === 0) {
+      setHighlightsError(`No highlight clips found for Innings ${summary.inningsNumber}.`);
+      setGeneratingInnings(null);
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/highlights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          match_id: matchId,
+          innings_number: summary.inningsNumber,
+          clip_ids: highlightClipIds,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Highlights endpoint failed with ${response.status}`);
+      }
+
+      const data = (await response.json()) as { highlights_url?: string };
+      if (!data.highlights_url) {
+        throw new Error('Highlights URL missing from response');
+      }
+
+      setHighlightsTitle(`Innings ${summary.inningsNumber} Highlights`);
+      setHighlightsUrl(data.highlights_url);
+      setHighlightsOpen(true);
+    } catch {
+      setHighlightsError(
+        'Could not generate highlights. Start the local highlights backend on localhost:8000.'
+      );
+    } finally {
+      setGeneratingInnings(null);
+    }
   };
 
   if (loading) {
@@ -216,6 +272,12 @@ export function MatchStats() {
       </div>
 
       <div className="p-4 flex-1">
+        {highlightsError && (
+          <div className="mb-4 bg-red-500/10 border border-red-500/50 rounded-lg p-3">
+            <p className="text-red-300 text-sm">{highlightsError}</p>
+          </div>
+        )}
+
         {summaries.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">No match data available</p>
@@ -251,6 +313,20 @@ export function MatchStats() {
                         </div>
                       </button>
 
+                      {isCompletedInnings(summary) && (
+                        <div className="bg-gray-850 px-4 py-3 border-t border-gray-700">
+                          <button
+                            onClick={() => void handleGenerateHighlights(summary)}
+                            disabled={generatingInnings === summary.inningsNumber}
+                            className="w-full bg-purple-500 hover:bg-purple-600 text-black font-bold py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {generatingInnings === summary.inningsNumber
+                              ? 'Generating Highlights...'
+                              : 'Generate Highlights Reel'}
+                          </button>
+                        </div>
+                      )}
+
                       {isExpanded && (
                         <div className="bg-gray-850 p-3 space-y-2">
                           {overs.map((over) => {
@@ -285,7 +361,12 @@ export function MatchStats() {
                                       >
                                         <div className="flex items-center gap-3">
                                           <div className="bg-green-500/20 border border-green-400 rounded px-2 py-1">
-                                            <span className="text-green-400 text-sm font-bold">Ball {ball.ball_number}</span>
+                                            <span className="text-green-400 text-sm font-bold">
+                                              Ball {ball.ball_number}
+                                              <span className="text-xs text-green-300 ml-1">
+                                                (Del {ball.delivery_index ?? ball.ball_number})
+                                              </span>
+                                            </span>
                                           </div>
                                           <div className={`border rounded px-3 py-1 text-sm font-bold ${getOutcomeColor(ball)}`}>
                                             {formatOutcome(ball)}
@@ -311,6 +392,15 @@ export function MatchStats() {
           </div>
         )}
       </div>
+
+      <HighlightsPlayer
+        isOpen={highlightsOpen}
+        title={highlightsTitle}
+        videoUrl={highlightsUrl}
+        onClose={() => {
+          setHighlightsOpen(false);
+        }}
+      />
     </div>
   );
 }

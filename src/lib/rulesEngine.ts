@@ -1,5 +1,6 @@
 import { executeTrackedAction, supabase } from './supabase';
 import { MatchRules, MatchRuleOverride } from './types';
+import { userFriendlyMessage } from './userFriendlyError';
 
 /** Defaults match DB migration seed when no row exists or values are null/invalid. */
 export const DEFAULT_GLOBAL_RULES: MatchRules = {
@@ -70,12 +71,16 @@ export async function updateGlobalRules(
   });
 
   if (error) {
-    throw new Error(`Failed to update global rules: ${error.message}`);
+    throw new Error(
+      userFriendlyMessage(error, { fallback: 'Could not update global rules. Please try again.' })
+    );
   }
 
   const row = data as { ok?: boolean; error?: string } | null;
   if (!row?.ok) {
-    throw new Error(row?.error || 'Failed to update global rules.');
+    throw new Error(
+      userFriendlyMessage(row?.error, { fallback: 'Could not update global rules. Please try again.' })
+    );
   }
 }
 
@@ -154,7 +159,11 @@ export async function applyOverride(
       }),
   });
 
-  if (error) throw new Error(`Failed to apply override: ${error.message}`);
+  if (error) {
+    throw new Error(
+      userFriendlyMessage(error, { fallback: 'Could not apply rule override. Please try again.' })
+    );
+  }
 }
 
 export async function revertOverride(overrideId: string, role: 'umpire'): Promise<void> {
@@ -173,7 +182,11 @@ export async function revertOverride(overrideId: string, role: 'umpire'): Promis
         .eq('id', overrideId),
   });
 
-  if (error) throw new Error(`Failed to revert override: ${error.message}`);
+  if (error) {
+    throw new Error(
+      userFriendlyMessage(error, { fallback: 'Could not revert rule override. Please try again.' })
+    );
+  }
 }
 
 export async function getActiveOverrides(matchId: string): Promise<MatchRuleOverride[]> {

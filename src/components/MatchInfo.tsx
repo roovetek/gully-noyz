@@ -5,20 +5,10 @@ import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
 import { useEffect, useState } from 'react';
 import { getEffectiveRules } from '../lib/rulesEngine';
 import { MatchRules } from '../lib/types';
-import { resetMatchCredentials } from '../lib/globalAdmin';
-import { SecureStorage } from '../lib/security';
-import { STORAGE_KEYS } from '../lib/constants';
 
 export function MatchInfo() {
   const { matchId } = useMatch();
   const [rules, setRules] = useState<MatchRules | null>(null);
-  const [adminPasscode, setAdminPasscode] = useState('');
-  const [newSecret, setNewSecret] = useState('');
-  const [newUmpirePasscode, setNewUmpirePasscode] = useState('');
-  const [newScorerPasscode, setNewScorerPasscode] = useState('');
-  const [confirmText, setConfirmText] = useState('');
-  const [resetBusy, setResetBusy] = useState(false);
-  const [resetFeedback, setResetFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     async function fetchMatchRules() {
@@ -29,51 +19,6 @@ export function MatchInfo() {
     }
     fetchMatchRules();
   }, [matchId]);
-
-  const handleResetCredentials = async () => {
-    if (!matchId) return;
-    setResetFeedback(null);
-
-    if (newSecret.trim().length < 6) {
-      setResetFeedback({ type: 'err', text: 'New match secret must be at least 6 characters.' });
-      return;
-    }
-    if (newUmpirePasscode.trim().length < 4) {
-      setResetFeedback({ type: 'err', text: 'New umpire passcode must be at least 4 characters.' });
-      return;
-    }
-    if (newScorerPasscode.trim().length < 4) {
-      setResetFeedback({ type: 'err', text: 'New scorer passcode must be at least 4 characters.' });
-      return;
-    }
-    if (confirmText.trim().toUpperCase() !== matchId) {
-      setResetFeedback({ type: 'err', text: `Type ${matchId} to confirm reset.` });
-      return;
-    }
-
-    setResetBusy(true);
-    const result = await resetMatchCredentials({
-      matchId,
-      adminPasscode,
-      newMatchSecret: newSecret,
-      newUmpirePasscode,
-      newScorerPasscode,
-    });
-    setResetBusy(false);
-
-    if (!result.ok) {
-      setResetFeedback({ type: 'err', text: result.message });
-      return;
-    }
-
-    SecureStorage.setItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${matchId}`, newSecret.trim());
-    setResetFeedback({ type: 'ok', text: 'Match secret and passcodes updated successfully.' });
-    setAdminPasscode('');
-    setNewSecret('');
-    setNewUmpirePasscode('');
-    setNewScorerPasscode('');
-    setConfirmText('');
-  };
 
   return (
     <div className="min-h-screen bg-black text-white pb-20">
@@ -96,96 +41,6 @@ export function MatchInfo() {
       <div className="p-4 space-y-4">
         {rules ? (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-red-700 bg-gray-900 p-5 space-y-4">
-              <h2 className="text-xl font-bold text-white">Admin Recovery</h2>
-              <p className="text-sm text-gray-300">
-                Replaces the <strong className="text-white">private match secret</strong>,{' '}
-                <strong className="text-white">umpire passcode</strong>, and{' '}
-                <strong className="text-white">scorer passcode</strong> in one step. Everyone must use the new values
-                after this. Requires your <strong className="text-white">Admin Console</strong> passcode.
-              </p>
-              <div className="space-y-4 max-w-lg">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Admin Console passcode</label>
-                  <input
-                    type="password"
-                    value={adminPasscode}
-                    onChange={(e) => setAdminPasscode(e.target.value)}
-                    className="w-full bg-black border border-gray-700 text-white px-3 py-2 rounded-lg"
-                    autoComplete="current-password"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">New match secret (min 6 characters)</label>
-                  <input
-                    type="password"
-                    value={newSecret}
-                    onChange={(e) => setNewSecret(e.target.value)}
-                    className="w-full bg-black border border-gray-700 text-white px-3 py-2 rounded-lg"
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">New umpire passcode (min 4)</label>
-                  <input
-                    type="password"
-                    value={newUmpirePasscode}
-                    onChange={(e) => setNewUmpirePasscode(e.target.value)}
-                    className="w-full bg-black border border-gray-700 text-white px-3 py-2 rounded-lg"
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">New scorer passcode (min 4)</label>
-                  <input
-                    type="password"
-                    value={newScorerPasscode}
-                    onChange={(e) => setNewScorerPasscode(e.target.value)}
-                    className="w-full bg-black border border-gray-700 text-white px-3 py-2 rounded-lg"
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">
-                    Confirm — type match ID: <span className="font-mono text-yellow-400">{matchId}</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={confirmText}
-                    onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
-                    className="w-full bg-black border border-gray-700 text-white px-3 py-2 rounded-lg font-mono"
-                    placeholder={matchId || ''}
-                  />
-                </div>
-              </div>
-              {resetFeedback && (
-                <div
-                  className={`text-sm px-3 py-2 rounded-lg ${
-                    resetFeedback.type === 'ok'
-                      ? 'bg-green-900/40 border border-green-700 text-green-200'
-                      : 'bg-red-900/40 border border-red-700 text-red-200'
-                  }`}
-                >
-                  {resetFeedback.text}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={handleResetCredentials}
-                disabled={
-                  resetBusy ||
-                  !matchId ||
-                  !adminPasscode.trim() ||
-                  !newSecret.trim() ||
-                  !newUmpirePasscode.trim() ||
-                  !newScorerPasscode.trim()
-                }
-                className="w-full md:w-auto px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-300 text-white font-semibold"
-              >
-                {resetBusy ? 'Updating credentials...' : 'Reset match secret and passcodes'}
-              </button>
-            </div>
-
             <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
               <h2 className="text-xl font-bold text-white">Overs and Balls</h2>
               <p className="text-sm text-gray-400">Overs per innings: {rules.overs_per_innings}</p>

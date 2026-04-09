@@ -2,6 +2,8 @@ import { CreditCard as Edit2, Check, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useMatch } from '../context/MatchContext';
 import { executeTrackedAction, supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+import { userFriendlyMessage } from '../lib/userFriendlyError';
 import { useMatchInningsLines } from '../hooks/useMatchInningsLines';
 
 type Variant = 'glass' | 'solid';
@@ -24,6 +26,7 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(matchName);
   const [matchCreatedAt, setMatchCreatedAt] = useState<string | null>(null);
+  const [nameSaveError, setNameSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setEditedName(matchName);
@@ -50,6 +53,7 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
 
   const handleSaveName = async () => {
     if (!editedName.trim() || !matchId) return;
+    setNameSaveError(null);
     try {
       const { error } = await executeTrackedAction({
         tableName: 'matches',
@@ -59,12 +63,20 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
         execute: () =>
           supabase.from('matches').update({ name: editedName.trim() }).eq('match_id', matchId),
       });
-      if (!error) {
-        setMatchName(editedName.trim());
-        setIsEditing(false);
+      if (error) {
+        logger.error('Failed to update match name', error);
+        setNameSaveError(
+          userFriendlyMessage(error, { fallback: 'Could not update match name. Please try again.' })
+        );
+        return;
       }
+      setMatchName(editedName.trim());
+      setIsEditing(false);
     } catch (err) {
-      console.error('Error updating match name:', err);
+      logger.error('Error updating match name', err);
+      setNameSaveError(
+        userFriendlyMessage(err, { fallback: 'Could not update match name. Please try again.' })
+      );
     }
   };
 
@@ -74,6 +86,11 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
     <div className={`${shellClass[variant]} flex flex-col gap-1.5 min-w-0 max-w-[min(100%,22rem)]`}>
       {showNameEdit && isEditing ? (
         <div className="flex flex-col gap-1.5 w-full min-w-0">
+          {nameSaveError && (
+            <p className="text-red-400 text-xs" role="alert">
+              {nameSaveError}
+            </p>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <input
               type="text"
@@ -90,6 +107,7 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
               onClick={() => {
                 setIsEditing(false);
                 setEditedName(matchName);
+                setNameSaveError(null);
               }}
               className="p-1 bg-gray-700 hover:bg-gray-600 rounded"
             >

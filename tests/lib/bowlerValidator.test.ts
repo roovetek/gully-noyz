@@ -6,7 +6,10 @@ import {
 import { createTestMatch, createTestClip, cleanupTestData } from '../helpers/factories';
 import { MatchRules } from '../../src/lib/types';
 
-describe('bowlerValidator', () => {
+const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
+const describeIntegration = runIntegration ? describe : describe.skip;
+
+describeIntegration('bowlerValidator', () => {
   const defaultRules: MatchRules = {
     overs_per_innings: 20,
     balls_per_over: 6,

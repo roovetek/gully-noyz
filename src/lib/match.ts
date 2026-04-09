@@ -1,4 +1,5 @@
 import { generateSecureMatchId } from './security';
+import { parseBaseRuns } from './ballCounter';
 
 export interface MatchConfig {
   matchId: string;
@@ -97,27 +98,25 @@ export function getNextBall(
 
 /** Cricket-style overs for one innings (e.g. 1.3 = 1 over + 3 balls). Matches MatchStats / Record logic. */
 export function calculateInningsOversDisplay(
-  clips: Array<{ over_number: number }>,
+  clips: Array<{ is_valid_ball?: boolean }>,
   ballsPerOver: number
 ): string {
   if (!clips.length || ballsPerOver < 1) {
     return '0';
   }
-  const uniqueOvers = new Set(clips.map((c) => c.over_number));
-  const maxOver = Math.max(...Array.from(uniqueOvers));
-  const ballsInLastOver = clips.filter((c) => c.over_number === maxOver).length;
-  const completedOvers = ballsInLastOver === ballsPerOver ? maxOver : maxOver - 1;
-  const remainingBalls = ballsInLastOver === ballsPerOver ? 0 : ballsInLastOver;
+  const validBallCount = clips.filter((c) => c.is_valid_ball !== false).length;
+  const completedOvers = Math.floor(validBallCount / ballsPerOver);
+  const remainingBalls = validBallCount % ballsPerOver;
   return remainingBalls === 0 ? completedOvers.toString() : `${completedOvers}.${remainingBalls}`;
 }
 
 export function calculateMatchStats(
-  clips: Array<{ outcome: string; dismissal_type?: string | null; over_number: number }>,
+  clips: Array<{ outcome: string; extra_runs?: number; dismissal_type?: string | null; is_valid_ball?: boolean }>,
   ballsPerOver: number
 ): MatchStats {
   const runs = clips.reduce((total, clip) => {
-    const runValue = parseInt(clip.outcome);
-    return total + (isNaN(runValue) ? 0 : runValue);
+    const runValue = parseBaseRuns(clip.outcome);
+    return total + runValue + (clip.extra_runs ?? 0);
   }, 0);
 
   const wickets = clips.filter(

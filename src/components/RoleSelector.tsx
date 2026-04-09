@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, Shield } from 'lucide-react';
 import { validateRole } from '../lib/accessControl';
 import { UserRole } from '../lib/types';
+import { logger } from '../lib/logger';
+import { userFriendlyMessage } from '../lib/userFriendlyError';
 
 interface RoleSelectorProps {
   matchId: string;
@@ -48,7 +50,8 @@ export function RoleSelector({ matchId, onRoleSelected, onClose }: RoleSelectorP
         setError('Invalid passcode for selected role');
       }
     } catch (err) {
-      setError('Failed to verify role. Please try again.');
+      logger.error('Role verification failed', err);
+      setError(userFriendlyMessage(err, { fallback: 'Failed to verify role. Please try again.' }));
     } finally {
       setLoading(false);
     }

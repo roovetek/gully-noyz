@@ -1,5 +1,6 @@
 import { executeTrackedAction, supabase } from './supabase';
 import { isValidMatchId } from './security';
+import { userFriendlyMessage } from './userFriendlyError';
 
 export type DeleteMatchResult =
   | { ok: true }
@@ -82,7 +83,7 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
 
   const { data: isValidPasscode, error: verifyError } = verifyResult;
   if (verifyError) {
-    return { ok: false, message: verifyError.message };
+    return { ok: false, message: userFriendlyMessage(verifyError) };
   }
   if (!isValidPasscode) {
     return { ok: false, message: 'Invalid Admin Console passcode.' };
@@ -112,15 +113,24 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
   });
 
   if (error) {
-    return { ok: false, message: deleteMatchErrorHint(error.message) };
+    const hint = deleteMatchErrorHint(error.message);
+    if (hint !== error.message) {
+      return { ok: false, message: hint };
+    }
+    return { ok: false, message: userFriendlyMessage(error) };
   }
 
   const row = data as RpcDeleteResult | null;
   if (row?.ok) {
     return { ok: true };
   }
+  const rawMsg = row?.error || 'Failed to delete match.';
+  const hint = deleteMatchErrorHint(rawMsg);
+  if (hint !== rawMsg) {
+    return { ok: false, message: hint };
+  }
   return {
     ok: false,
-    message: deleteMatchErrorHint(row?.error || 'Failed to delete match.'),
+    message: userFriendlyMessage(rawMsg, { fallback: 'Could not delete match. Please try again.' }),
   };
 }

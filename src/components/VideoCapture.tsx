@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Circle, Square, ChevronUp, Pause, Play, SkipForward } from 'lucide-react';
+import { Circle, Square, ChevronUp, Pause, Play, SkipForward, Mic } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { executeTrackedAction, supabase } from '../lib/supabase';
 import { getTestDataFilter } from '../lib/testDataFilter';
@@ -7,26 +7,53 @@ import { logger } from '../lib/logger';
 
 import { validateRole } from '../lib/accessControl';
 import { calculateInningsOversDisplay } from '../lib/match';
-
-const DISMISSAL_TYPES = [
-  'unknown',
-  'bowled',
-  'caught',
-  'lbw',
-  'runout',
-  'stumped',
-  'hitwicket',
-  'hitballtwice',
-  'obstructing',
-  'timedout',
-  'handledball',
-] as const;
+import { formatDismissalOptionLabel, getDismissalOptionOrder } from '../lib/dismissalOptions';
+import { DEFAULT_GLOBAL_RULES, getEffectiveRules } from '../lib/rulesEngine';
+import { isValidBall, parseBaseRuns, resolveBallScoring } from '../lib/ballCounter';
+import type { BallOutcome, MatchRules } from '../lib/types';
+import { useMatchEngine } from '../hooks/useMatchEngine';
+import { ExtraType, WicketType } from '../engine/types';
+import {
+  getAIScoringMode,
+  scoreFromAudioWithLocalAI,
+  setAIScoringMode,
+  type AIScoreDecision,
+  type AIScoringMode,
+} from '../lib/aiScoringClient';
+import { writeAIDecisionTrace } from '../lib/aiDecisionTrace';
+import { userFriendlyMessage } from '../lib/userFriendlyError';
+import { ERROR_MESSAGES } from '../lib/constants';
 
 interface RecordingData {
   blob: Blob;
   duration: number;
   timestamp: number;
 }
+
+type SpeechRecognitionResultLike = {
+  0: {
+    transcript: string;
+  };
+};
+
+type SpeechRecognitionEventLike = Event & {
+  results: {
+    [index: number]: SpeechRecognitionResultLike;
+    length: number;
+  };
+  resultIndex: number;
+};
+
+type SpeechRecognitionLike = EventTarget & {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
 
 function getCameraUserMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'name' in err) {
@@ -52,34 +79,53 @@ function getCameraUserMessage(err: unknown): string {
 
 export function VideoCapture() {
   const { matchId } = useMatch();
+  const { initialize: initializeEngine, dispatch: dispatchEngine } = useMatchEngine();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [overNumber, setOverNumber] = useState(1);
   const [ballNumber, setBallNumber] = useState(1);
+  const [deliveryNumber, setDeliveryNumber] = useState(1);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [selectedOutType, setSelectedOutType] = useState<string | null>(null);
+  const [selectedExtraRuns, setSelectedExtraRuns] = useState(0);
   const [showDrawer, setShowDrawer] = useState(false);
   const [recordingData, setRecordingData] = useState<RecordingData | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [confirmBallNumber, setConfirmBallNumber] = useState(1);
-  const [usedBalls, setUsedBalls] = useState<Set<number>>(new Set());
+  const [confirmDeliveryNumber, setConfirmDeliveryNumber] = useState(1);
+  const [usedDeliveries, setUsedDeliveries] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [ballsPerOver, setBallsPerOver] = useState(6);
   const [totalOvers, setTotalOvers] = useState(20);
+  const [rules, setRules] = useState<MatchRules>(DEFAULT_GLOBAL_RULES);
   const [totalRuns, setTotalRuns] = useState(0);
   const [totalWickets, setTotalWickets] = useState(0);
   const [currentOvers, setCurrentOvers] = useState('0');
   const [cameraInitialized, setCameraInitialized] = useState(false);
   const [currentInnings, setCurrentInnings] = useState(1);
   const [inningsComplete, setInningsComplete] = useState(false);
+  const [trimStartMs, setTrimStartMs] = useState<number | null>(null);
+  const [trimEndMs, setTrimEndMs] = useState<number | null>(null);
+  const [hitTimestampMs, setHitTimestampMs] = useState<number | null>(null);
+  const [voiceToast, setVoiceToast] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [pendingVoiceOutcome, setPendingVoiceOutcome] = useState<string | null>(null);
+  const [aiMode, setAiMode] = useState<AIScoringMode>(() => getAIScoringMode());
+  const [isAIScoring, setIsAIScoring] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<AIScoreDecision | null>(null);
+  const [aiStatus, setAiStatus] = useState<string>('AI assist is off');
+  const [needsFallbackTrace, setNeedsFallbackTrace] = useState(false);
 
   // Over-complete confirm/edit state
   const [overCompleteData, setOverCompleteData] = useState<{
@@ -92,10 +138,33 @@ export function VideoCapture() {
   const [umpireAuthError, setUmpireAuthError] = useState('');
   const [umpireAuthenticated, setUmpireAuthenticated] = useState(false);
   const [editableOverBalls, setEditableOverBalls] = useState<
-    { id: string; ball_number: number; outcome: string; dismissal_type: string | null }[]
+    {
+      id: string;
+      ball_number: number;
+      delivery_index: number;
+      outcome: string;
+      dismissal_type: string | null;
+      extra_runs: number;
+      is_valid_ball: boolean;
+    }[]
   >([]);
-  const [editBallOutcome, setEditBallOutcome] = useState<Record<number, string>>({});
-  const [editBallDismissalType, setEditBallDismissalType] = useState<Record<number, string>>({});
+  const [editBallOutcome, setEditBallOutcome] = useState<Record<string, string>>({});
+  const [editBallDismissalType, setEditBallDismissalType] = useState<Record<string, string>>({});
+
+  const mapOutcomeToExtraType = (outcome: BallOutcome): ExtraType => {
+    if (outcome === 'wide') return ExtraType.Wide;
+    if (outcome === 'noball') return ExtraType.NoBall;
+    if (outcome === 'bye') return ExtraType.Bye;
+    if (outcome === 'legbye') return ExtraType.LegBye;
+    return ExtraType.None;
+  };
+
+  const mapDismissalType = (value: string | null): WicketType | null => {
+    if (!value) return null;
+    const v = value.toLowerCase();
+    const all = new Set<string>(Object.values(WicketType));
+    return all.has(v) ? (v as WicketType) : WicketType.Unknown;
+  };
 
   const loadMatchAndClips = useCallback(async () => {
     if (!matchId) return;
@@ -109,17 +178,19 @@ export function VideoCapture() {
     const bpo = matchData?.balls_per_over ?? 6;
     const to = matchData?.total_overs ?? 20;
     const inningsForQuery = matchData?.current_innings ?? currentInnings;
+    const effectiveRules = (await getEffectiveRules(matchId)) ?? DEFAULT_GLOBAL_RULES;
 
     if (matchData) {
       setBallsPerOver(bpo);
       setTotalOvers(to);
       setCurrentInnings(matchData.current_innings);
     }
+    setRules(effectiveRules);
 
     const testDataFilter = getTestDataFilter();
     let clipsQuery = supabase
       .from('clips')
-      .select('outcome, dismissal_type, over_number, ball_number, innings_number')
+      .select('outcome, dismissal_type, over_number, ball_number, delivery_index, innings_number, extra_runs, is_valid_ball')
       .eq('match_id', matchId)
       .eq('innings_number', inningsForQuery);
 
@@ -129,33 +200,52 @@ export function VideoCapture() {
 
     const { data: clips } = await clipsQuery
       .order('over_number', { ascending: false })
+      .order('delivery_index', { ascending: false })
       .order('ball_number', { ascending: false });
 
+    let activeOverNumber = 1;
     if (clips && clips.length > 0) {
       const runs = clips.reduce((total, clip) => {
-        const runValue = parseInt(clip.outcome);
-        return total + (isNaN(runValue) ? 0 : runValue);
+        const runValue = parseBaseRuns(clip.outcome);
+        return total + runValue + (clip.extra_runs ?? 0);
       }, 0);
 
-      const wickets = clips.filter(clip => clip.dismissal_type != null || clip.outcome === 'wicket').length;
+      const wickets = clips.filter(clip => clip.dismissal_type !== null || clip.outcome === 'wicket').length;
 
       setTotalRuns(runs);
       setTotalWickets(wickets);
       setCurrentOvers(calculateInningsOversDisplay(clips, bpo));
 
-      const latestClip = clips[0];
-      if (latestClip.over_number >= to && latestClip.ball_number >= bpo) {
+      const maxOver = Math.max(...clips.map((clip) => clip.over_number));
+      const currentOverClips = clips.filter((clip) => clip.over_number === maxOver);
+      const validBallsInOver = currentOverClips.filter((clip) => clip.is_valid_ball !== false).length;
+      const latestDelivery = Math.max(
+        ...currentOverClips.map((clip) => clip.delivery_index ?? clip.ball_number)
+      );
+
+      if (maxOver >= to && validBallsInOver >= bpo) {
+        activeOverNumber = maxOver;
         setInningsComplete(true);
-      } else if (latestClip.ball_number >= bpo) {
-        setOverNumber(latestClip.over_number + 1);
+        setOverNumber(maxOver);
+        setBallNumber(validBallsInOver);
+        setDeliveryNumber(latestDelivery + 1);
+      } else if (validBallsInOver >= bpo) {
+        activeOverNumber = maxOver + 1;
+        setOverNumber(maxOver + 1);
         setBallNumber(1);
+        setDeliveryNumber(1);
+        setInningsComplete(false);
       } else {
-        setOverNumber(latestClip.over_number);
-        setBallNumber(latestClip.ball_number + 1);
+        activeOverNumber = maxOver;
+        setOverNumber(maxOver);
+        setBallNumber(validBallsInOver + 1);
+        setDeliveryNumber(latestDelivery + 1);
+        setInningsComplete(false);
       }
     } else {
       setOverNumber(1);
       setBallNumber(1);
+      setDeliveryNumber(1);
       setTotalRuns(0);
       setTotalWickets(0);
       setCurrentOvers('0');
@@ -164,10 +254,10 @@ export function VideoCapture() {
 
     let usedQuery = supabase
       .from('clips')
-      .select('ball_number')
+      .select('delivery_index')
       .eq('match_id', matchId)
       .eq('innings_number', inningsForQuery)
-      .eq('over_number', overNumber);
+      .eq('over_number', activeOverNumber);
 
     if (testDataFilter !== undefined) {
       usedQuery = usedQuery.eq('is_test_data', testDataFilter);
@@ -176,13 +266,18 @@ export function VideoCapture() {
     const { data: usedData } = await usedQuery;
 
     if (usedData) {
-      setUsedBalls(new Set(usedData.map(clip => clip.ball_number)));
+      setUsedDeliveries(new Set(usedData.map((clip) => clip.delivery_index)));
     }
-  }, [matchId, overNumber, currentInnings]);
+  }, [matchId, currentInnings]);
 
   useEffect(() => {
     void loadMatchAndClips();
   }, [loadMatchAndClips]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    initializeEngine(matchId, rules);
+  }, [matchId, rules, initializeEngine]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -202,6 +297,30 @@ export function VideoCapture() {
       supabase.removeChannel(channel);
     };
   }, [matchId, loadMatchAndClips]);
+
+  useEffect(() => {
+    if (!voiceToast) return;
+    const timeout = setTimeout(() => setVoiceToast(null), 3000);
+    return () => clearTimeout(timeout);
+  }, [voiceToast]);
+
+  useEffect(() => {
+    return () => {
+      speechRecognitionRef.current?.stop();
+    };
+  }, []);
+
+  const getElapsedRecordingMs = useCallback(() => {
+    if (!recordingStartedAtRef.current) {
+      return recordingTime * 1000;
+    }
+    return Math.max(0, Date.now() - recordingStartedAtRef.current);
+  }, [recordingTime]);
+
+  const formatMs = (value: number | null): string => {
+    if (value === null) return '--';
+    return (value / 1000).toFixed(2);
+  };
 
   const initCamera = async (): Promise<boolean> => {
     if (cameraInitialized) return true;
@@ -284,6 +403,11 @@ export function VideoCapture() {
     try {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
+      recordingStartedAtRef.current = Date.now();
+      if (trimStartMs === null) {
+        setTrimStartMs(0);
+      }
+      setTrimEndMs(null);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -300,6 +424,7 @@ export function VideoCapture() {
         };
         setRecordingData(data);
         setConfirmBallNumber(ballNumber);
+        setConfirmDeliveryNumber(deliveryNumber);
         setShowDrawer(true);
 
         console.log('Recording stopped', {
@@ -332,17 +457,278 @@ export function VideoCapture() {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      if (trimEndMs === null) {
+        setTrimEndMs(getElapsedRecordingMs());
+      }
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (timerRef.current) clearInterval(timerRef.current);
     }
   };
 
-  const handleOutcomeSelect = (outcome: string) => {
+  const handleOutcomeSelect = useCallback((outcome: string) => {
     setSelectedOutcome(outcome);
     if (outcome !== 'wicket') {
       setSelectedOutType(null);
     }
+    if (outcome !== 'wide' && outcome !== 'noball') {
+      setSelectedExtraRuns(0);
+    } else if (outcome === 'wide') {
+      setSelectedExtraRuns(rules.wide_no_runs ? 0 : 1);
+    } else {
+      setSelectedExtraRuns(0);
+    }
+  }, [rules]);
+
+  const applyAISuggestion = useCallback((decision: AIScoreDecision) => {
+    handleOutcomeSelect(decision.outcome);
+    setSelectedOutType(decision.outcome === 'wicket' ? decision.dismissal_type ?? 'unknown' : null);
+    if (decision.outcome === 'wide' || decision.outcome === 'noball') {
+      setSelectedExtraRuns(decision.extra_runs);
+    }
+  }, [handleOutcomeSelect]);
+
+  useEffect(() => {
+    if (!showDrawer || !pendingVoiceOutcome) return;
+    handleOutcomeSelect(pendingVoiceOutcome);
+    setPendingVoiceOutcome(null);
+  }, [showDrawer, pendingVoiceOutcome, handleOutcomeSelect]);
+
+  useEffect(() => {
+    if (!showDrawer) {
+      setAiSuggestion(null);
+      setIsAIScoring(false);
+      setNeedsFallbackTrace(false);
+      return;
+    }
+    if (aiMode === 'off') {
+      setAiStatus('AI assist is off');
+      setAiSuggestion(null);
+      return;
+    }
+    if (aiMode === 'live' && !recordingData?.blob) {
+      setAiStatus('Record audio to use live AI');
+      setAiSuggestion(null);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      setIsAIScoring(true);
+      setAiStatus(aiMode === 'mock' ? 'Generating mock suggestion...' : 'Getting local AI suggestion...');
+      const audioBlob = recordingData?.blob ?? new Blob(['mock-audio'], { type: 'audio/webm' });
+      const result = await scoreFromAudioWithLocalAI({ audioBlob, matchId });
+      if (cancelled) return;
+
+      if (result.ok) {
+        setAiSuggestion(result.decision);
+        setAiStatus(
+          `AI suggestion ready (${Math.round(result.decision.confidence * 100)}% confidence)`
+        );
+        setNeedsFallbackTrace(false);
+        await writeAIDecisionTrace({
+          matchId,
+          inningsNumber: currentInnings,
+          overNumber,
+          ballNumber: confirmBallNumber,
+          deliveryIndex: confirmDeliveryNumber,
+          mode: result.mode,
+          status: 'success',
+          transcript: result.decision.transcript,
+          rationale: result.decision.rationale,
+          confidence: result.decision.confidence,
+          decision: result.decision,
+          rawResponse: result.raw,
+        });
+      } else {
+        setAiSuggestion(null);
+        setAiStatus(`AI unavailable: ${result.message}`);
+        setNeedsFallbackTrace(result.reason !== 'disabled');
+        await writeAIDecisionTrace({
+          matchId,
+          inningsNumber: currentInnings,
+          overNumber,
+          ballNumber: confirmBallNumber,
+          deliveryIndex: confirmDeliveryNumber,
+          mode: result.mode === 'off' ? 'off' : 'live',
+          status: result.reason === 'error' ? 'error' : 'unavailable',
+          decision: {},
+          errorMessage: result.message,
+          rawResponse: result.raw,
+        });
+      }
+      setIsAIScoring(false);
+    };
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showDrawer,
+    aiMode,
+    recordingData,
+    matchId,
+    currentInnings,
+    overNumber,
+    confirmBallNumber,
+    confirmDeliveryNumber,
+  ]);
+
+  const handleStartDelivery = async () => {
+    setVoiceError(null);
+    setTrimStartMs(isRecording ? getElapsedRecordingMs() : 0);
+    setTrimEndMs(null);
+    setHitTimestampMs(null);
+
+    if (!isRecording) {
+      const ok = await initCamera();
+      if (!ok || !videoRef.current?.srcObject) return;
+      await startRecording();
+    }
+
+    setVoiceToast('Delivery started');
+  };
+
+  const handleBallDead = () => {
+    if (!isRecording) {
+      setVoiceToast('No active recording');
+      return;
+    }
+    const endMs = getElapsedRecordingMs();
+    setTrimEndMs(endMs);
+    stopRecording();
+    setVoiceToast('Ball dead marker saved');
+  };
+
+  const handleMarkHit = () => {
+    const markerMs = getElapsedRecordingMs();
+    if (!isRecording && !showDrawer) {
+      setVoiceToast('Start a delivery before marking hit');
+      return;
+    }
+    setHitTimestampMs(markerMs);
+    setVoiceToast(`Hit marked at ${formatMs(markerMs)}s`);
+  };
+
+  const applyVoiceOutcome = (outcome: string) => {
+    if (!showDrawer && !isRecording) {
+      handleSkipRecording();
+    }
+    if (showDrawer) {
+      handleOutcomeSelect(outcome);
+    } else {
+      setPendingVoiceOutcome(outcome);
+    }
+    setVoiceToast(`Outcome set to ${outcome}`);
+  };
+
+  const parseVoiceCommand = (transcript: string) => {
+    const normalized = transcript.toLowerCase();
+
+    if (normalized.includes('start delivery') || normalized.includes('start recording')) {
+      void handleStartDelivery();
+      return;
+    }
+    if (
+      normalized.includes('ball dead') ||
+      normalized.includes('end play') ||
+      normalized.includes('stop delivery')
+    ) {
+      handleBallDead();
+      return;
+    }
+    if (normalized.includes('mark hit') || normalized.includes('bat hit')) {
+      handleMarkHit();
+      return;
+    }
+
+    if (normalized.includes('wide')) {
+      applyVoiceOutcome('wide');
+      return;
+    }
+    if (normalized.includes('no ball') || normalized.includes('noball')) {
+      applyVoiceOutcome('noball');
+      return;
+    }
+    if (normalized.includes('out') || normalized.includes('wicket')) {
+      applyVoiceOutcome('wicket');
+      return;
+    }
+    if (normalized.includes('dot')) {
+      applyVoiceOutcome('dot');
+      return;
+    }
+    if (normalized.includes('four') || normalized.match(/\b4\b/)) {
+      applyVoiceOutcome('4');
+      return;
+    }
+    if (normalized.includes('six') || normalized.match(/\b6\b/)) {
+      applyVoiceOutcome('6');
+      return;
+    }
+    if (normalized.includes('one') || normalized.match(/\b1\b/)) {
+      applyVoiceOutcome('1');
+      return;
+    }
+    if (normalized.includes('two') || normalized.match(/\b2\b/)) {
+      applyVoiceOutcome('2');
+      return;
+    }
+    if (normalized.includes('three') || normalized.match(/\b3\b/)) {
+      applyVoiceOutcome('3');
+      return;
+    }
+
+    setVoiceToast(`Heard: ${transcript}`);
+  };
+
+  const startVoiceCapture = () => {
+    if (isListening) return;
+    setVoiceError(null);
+
+    const SpeechRecognitionCtor = (
+      window as Window & {
+        SpeechRecognition?: new () => SpeechRecognitionLike;
+        webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+      }
+    ).SpeechRecognition ?? (
+      window as Window & {
+        webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+      }
+    ).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setVoiceError('Speech recognition is not available in this browser');
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const text = event.results[event.resultIndex]?.[0]?.transcript?.trim();
+      if (!text) return;
+      setVoiceToast(`Voice: "${text}"`);
+      parseVoiceCommand(text);
+    };
+    recognition.onerror = () => {
+      setVoiceError('Could not understand voice command');
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    speechRecognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  };
+
+  const stopVoiceCapture = () => {
+    speechRecognitionRef.current?.stop();
+    setIsListening(false);
   };
 
   const uploadClip = async () => {
@@ -353,8 +739,8 @@ export function VideoCapture() {
       return;
     }
 
-    if (usedBalls.has(confirmBallNumber)) {
-      setError(`Ball ${confirmBallNumber} has already been recorded for Over ${overNumber}`);
+    if (usedDeliveries.has(confirmDeliveryNumber)) {
+      setError(`Delivery ${confirmDeliveryNumber} has already been recorded for Over ${overNumber}`);
       return;
     }
 
@@ -362,9 +748,22 @@ export function VideoCapture() {
     setError(null);
 
     try {
-      const outcomeValue = selectedOutcome.toLowerCase();
+      const outcomeValue = selectedOutcome.toLowerCase() as BallOutcome;
       const dismissalTypeValue =
         selectedOutcome === 'wicket' && selectedOutType ? selectedOutType.toLowerCase() : null;
+      const baseRuns = parseBaseRuns(outcomeValue);
+      const configuredExtras =
+        outcomeValue === 'wide'
+          ? (rules.wide_no_runs ? 0 : selectedExtraRuns)
+          : outcomeValue === 'noball'
+            ? selectedExtraRuns
+            : 0;
+      const { effectiveExtraRuns, validBall } = resolveBallScoring(
+        outcomeValue,
+        rules,
+        baseRuns,
+        configuredExtras
+      );
 
       let videoUrl: string | null = null;
 
@@ -396,10 +795,17 @@ export function VideoCapture() {
           innings_number: currentInnings,
           over_number: overNumber,
           ball_number: confirmBallNumber,
+          delivery_index: confirmDeliveryNumber,
           outcome: outcomeValue,
           dismissal_type: dismissalTypeValue,
+          extra_runs: effectiveExtraRuns,
+          is_valid_ball: validBall,
           video_url: videoUrl,
           duration: recordingData?.duration ?? 0,
+          trim_start_ms: trimStartMs,
+          trim_end_ms: trimEndMs,
+          hit_timestamp_ms: hitTimestampMs,
+          is_highlight: ['4', '6', 'wicket'].includes(outcomeValue),
         },
         matchId,
         execute: async () =>
@@ -408,37 +814,93 @@ export function VideoCapture() {
             innings_number: currentInnings,
             over_number: overNumber,
             ball_number: confirmBallNumber,
+            delivery_index: confirmDeliveryNumber,
             outcome: outcomeValue,
             dismissal_type: dismissalTypeValue,
+            extra_runs: effectiveExtraRuns,
+            is_valid_ball: validBall,
             video_url: videoUrl,
             duration: recordingData?.duration ?? 0,
+            trim_start_ms: trimStartMs,
+            trim_end_ms: trimEndMs,
+            hit_timestamp_ms: hitTimestampMs,
+            is_highlight: ['4', '6', 'wicket'].includes(outcomeValue),
           }),
       });
 
       if (dbError) {
         logger.error('Failed to insert clip into database', dbError);
-        setError('Failed to save ball outcome. Please try again.');
+        setError(
+          userFriendlyMessage(dbError, { fallback: 'Failed to save ball outcome. Please try again.' })
+        );
         setIsUploading(false);
         return;
       }
 
-      const nextBall = confirmBallNumber + 1;
-      if (nextBall > ballsPerOver) {
+      dispatchEngine({
+        type: 'DELIVER_BALL',
+        payload: {
+          outcome_label: outcomeValue,
+          runs_batter: baseRuns,
+          runs_extras: effectiveExtraRuns,
+          extra_type: mapOutcomeToExtraType(outcomeValue),
+          wicket_type: mapDismissalType(dismissalTypeValue),
+          wicket_counts: Boolean(dismissalTypeValue || outcomeValue === 'wicket'),
+          metadata: {
+            hit_timestamp_ms: hitTimestampMs,
+            video_clip_id: videoUrl,
+            voice_intent_confidence: null,
+            is_highlight: ['4', '6', 'wicket'].includes(outcomeValue),
+            transcript: null,
+          },
+        },
+      });
+
+      if (needsFallbackTrace) {
+        await writeAIDecisionTrace({
+          matchId,
+          inningsNumber: currentInnings,
+          overNumber,
+          ballNumber: confirmBallNumber,
+          deliveryIndex: confirmDeliveryNumber,
+          mode: 'fallback',
+          status: 'success',
+          rationale: 'Manual fallback used after AI failure/unavailability',
+          decision: {
+            outcome: outcomeValue,
+            dismissal_type: dismissalTypeValue,
+            extra_runs: effectiveExtraRuns,
+          },
+        });
+        setNeedsFallbackTrace(false);
+      }
+
+      const nextDelivery = confirmDeliveryNumber + 1;
+      const nextBall = validBall ? confirmBallNumber + 1 : confirmBallNumber;
+      if (validBall && nextBall > ballsPerOver) {
         // Over is complete — show confirm/edit modal instead of auto-advancing
         const nextOver = overNumber + 1;
         const advanceInnings = nextOver > totalOvers && currentInnings === 1;
         setOverCompleteData({ completedOver: overNumber, nextOver, advanceInnings });
       } else {
         setBallNumber(nextBall);
+        setDeliveryNumber(nextDelivery);
       }
 
       setShowDrawer(false);
       setSelectedOutcome(null);
       setSelectedOutType(null);
+      setSelectedExtraRuns(0);
       setRecordingData(null);
+      setTrimStartMs(null);
+      setTrimEndMs(null);
+      setHitTimestampMs(null);
       setIsUploading(false);
+      setAiSuggestion(null);
+      setAiStatus(aiMode === 'off' ? 'AI assist is off' : 'Ready for next delivery');
     } catch (err) {
-      console.error('Upload error:', err);
+      logger.error('Upload clip failed', err);
+      setError(userFriendlyMessage(err, { fallback: ERROR_MESSAGES.UPLOAD_FAILED }));
       setIsUploading(false);
     }
   };
@@ -446,6 +908,7 @@ export function VideoCapture() {
   const handleSkipRecording = () => {
     setRecordingData(null);
     setConfirmBallNumber(ballNumber);
+    setConfirmDeliveryNumber(deliveryNumber);
     setShowDrawer(true);
   };
 
@@ -471,10 +934,12 @@ export function VideoCapture() {
       setCurrentInnings(2);
       setOverNumber(1);
       setBallNumber(1);
+      setDeliveryNumber(1);
       setInningsComplete(false);
     } else {
       setOverNumber(nextOver);
       setBallNumber(1);
+      setDeliveryNumber(1);
     }
   };
 
@@ -493,10 +958,11 @@ export function VideoCapture() {
     if (overCompleteData) {
       const { data } = await supabase
         .from('clips')
-        .select('id, ball_number, outcome, dismissal_type')
+        .select('id, ball_number, delivery_index, outcome, dismissal_type, extra_runs, is_valid_ball')
         .eq('match_id', matchId)
         .eq('innings_number', currentInnings)
         .eq('over_number', overCompleteData.completedOver)
+        .order('delivery_index')
         .order('ball_number');
       setEditableOverBalls(data || []);
       setEditBallOutcome({});
@@ -508,14 +974,14 @@ export function VideoCapture() {
     if (!matchId) return;
 
     for (const ball of editableOverBalls) {
-      const selectedOutcome = editBallOutcome[ball.ball_number] ?? ball.outcome;
-      const selectedDismissal = editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? '';
-      const normalizedOutcome = selectedOutcome.toLowerCase();
+      const selectedOutcome = editBallOutcome[ball.id] ?? ball.outcome;
+      const selectedDismissal = editBallDismissalType[ball.id] ?? ball.dismissal_type ?? '';
+      const normalizedOutcome = selectedOutcome.toLowerCase() as BallOutcome;
       const normalizedDismissal =
         normalizedOutcome === 'wicket' ? (selectedDismissal ? selectedDismissal.toLowerCase() : null) : null;
 
       if (normalizedOutcome === 'wicket' && !normalizedDismissal) {
-        setError(`Select dismissal type for ball ${ball.ball_number}`);
+        setError(`Select dismissal type for delivery ${ball.delivery_index}`);
         return;
       }
     }
@@ -526,20 +992,32 @@ export function VideoCapture() {
       matchId,
       payload: {
         innings_number: currentInnings,
-        ball_numbers: editableOverBalls.map((b) => b.ball_number),
+        clip_ids: editableOverBalls.map((b) => b.id),
       },
       execute: async () => {
         for (const ball of editableOverBalls) {
-          const selectedOutcome = editBallOutcome[ball.ball_number] ?? ball.outcome;
-          const selectedDismissal = editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? '';
-          const normalizedOutcome = selectedOutcome.toLowerCase();
+          const selectedOutcome = editBallOutcome[ball.id] ?? ball.outcome;
+          const selectedDismissal = editBallDismissalType[ball.id] ?? ball.dismissal_type ?? '';
+          const normalizedOutcome = selectedOutcome.toLowerCase() as BallOutcome;
           const normalizedDismissal =
             normalizedOutcome === 'wicket' ? (selectedDismissal ? selectedDismissal.toLowerCase() : null) : null;
+          const extraRuns =
+            normalizedOutcome === 'wide'
+              ? (rules.wide_no_runs ? 0 : Math.max(1, ball.extra_runs ?? 1))
+              : normalizedOutcome === 'noball'
+                ? Math.max(0, ball.extra_runs ?? 0)
+                : 0;
+          const validBall = isValidBall(normalizedOutcome, rules);
 
           if (ball.id) {
             const { error } = await supabase
               .from('clips')
-              .update({ outcome: normalizedOutcome, dismissal_type: normalizedDismissal })
+              .update({
+                outcome: normalizedOutcome,
+                dismissal_type: normalizedDismissal,
+                extra_runs: extraRuns,
+                is_valid_ball: validBall,
+              })
               .eq('id', ball.id);
             if (error) {
               return { error };
@@ -551,7 +1029,8 @@ export function VideoCapture() {
     });
 
     if (batchError) {
-      setError('Failed to save over edits.');
+      logger.error('Failed to save over edits', batchError);
+      setError(userFriendlyMessage(batchError, { fallback: 'Failed to save over edits. Please try again.' }));
       return;
     }
 
@@ -565,11 +1044,18 @@ export function VideoCapture() {
     setShowDrawer(false);
     setSelectedOutcome(null);
     setSelectedOutType(null);
+    setSelectedExtraRuns(0);
     setRecordingData(null);
+    setTrimStartMs(null);
+    setTrimEndMs(null);
+    setHitTimestampMs(null);
+    setAiSuggestion(null);
+    setAiStatus(aiMode === 'off' ? 'AI assist is off' : 'Cancelled');
+    setNeedsFallbackTrace(false);
   };
 
   return (
-    <div className="relative h-full bg-black">
+    <div className="relative h-full min-h-0 bg-black">
       <video
         ref={videoRef}
         autoPlay
@@ -593,6 +1079,28 @@ export function VideoCapture() {
             >
               Dismiss
             </button>
+          </div>
+        )}
+
+        {voiceError && (
+          <div
+            role="alert"
+            className="bg-red-500/20 border border-red-400 rounded-lg p-3 flex items-center justify-between"
+          >
+            <p className="text-red-200 text-sm">{voiceError}</p>
+            <button
+              type="button"
+              onClick={() => setVoiceError(null)}
+              className="text-xs text-gray-300 underline hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {voiceToast && (
+          <div className="bg-purple-500/20 border border-purple-400 rounded-lg p-3">
+            <p className="text-purple-200 text-sm font-medium">{voiceToast}</p>
           </div>
         )}
 
@@ -642,9 +1150,81 @@ export function VideoCapture() {
             <div className="text-red-400 text-lg font-bold">{totalWickets}</div>
           </div>
         </div>
+
+        <div className="bg-black/70 backdrop-blur rounded-lg px-3 py-2 border border-purple-400">
+          <div className="text-xs text-gray-400">
+            Trim start: <span className="text-white">{formatMs(trimStartMs)}s</span>
+            <span className="mx-2 text-gray-500">|</span>
+            Trim end: <span className="text-white">{formatMs(trimEndMs)}s</span>
+            <span className="mx-2 text-gray-500">|</span>
+            Hit: <span className="text-white">{formatMs(hitTimestampMs)}s</span>
+          </div>
+        </div>
+
+        <div className="bg-black/70 backdrop-blur rounded-lg px-3 py-2 border border-cyan-400">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-cyan-300 font-semibold">AI Assist</span>
+            <select
+              value={aiMode}
+              onChange={(e) => {
+                const nextMode = e.target.value as AIScoringMode;
+                setAIScoringMode(nextMode);
+                setAiMode(nextMode);
+                setAiSuggestion(null);
+                setAiStatus(nextMode === 'off' ? 'AI assist is off' : 'Mode updated');
+              }}
+              className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1"
+            >
+              <option value="off">Manual only</option>
+              <option value="live">Local AI</option>
+              <option value="mock">Mock AI</option>
+            </select>
+          </div>
+          <div className="text-[11px] text-gray-300 mt-1">{aiStatus}</div>
+        </div>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 pb-20 px-4 z-10">
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <button
+            onClick={() => void handleStartDelivery()}
+            disabled={showDrawer || inningsComplete || !!overCompleteData || isUploading}
+            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
+          >
+            Start Delivery
+          </button>
+          <button
+            onClick={handleBallDead}
+            disabled={!isRecording || isUploading}
+            className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
+          >
+            Ball Dead
+          </button>
+          <button
+            onClick={handleMarkHit}
+            disabled={(!isRecording && !showDrawer) || isUploading}
+            className="bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
+          >
+            Mark Hit
+          </button>
+          <button
+            onPointerDown={startVoiceCapture}
+            onPointerUp={stopVoiceCapture}
+            onPointerCancel={stopVoiceCapture}
+            onPointerLeave={stopVoiceCapture}
+            disabled={isUploading}
+            className={`flex items-center justify-center gap-1 font-bold py-2 rounded-lg text-xs transition-colors ${
+              isListening
+                ? 'bg-purple-600 text-white'
+                : 'bg-purple-500 hover:bg-purple-600 text-black'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title="Hold to speak"
+          >
+            <Mic size={14} />
+            {isListening ? 'Listening' : 'Hold to Speak'}
+          </button>
+        </div>
+
         <div className="flex justify-center items-center gap-4">
           {isRecording && (
             <button
@@ -766,16 +1346,20 @@ export function VideoCapture() {
           </h3>
           <div className="space-y-3 mb-6">
             {editableOverBalls.map((ball) => (
-              <div key={ball.ball_number} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
-                <span className="text-gray-400 text-sm w-16 flex-shrink-0">Ball {ball.ball_number}</span>
+              <div key={ball.id} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+                <span className="text-gray-400 text-sm w-20 flex-shrink-0">
+                  Ball {ball.ball_number}
+                  <br />
+                  <span className="text-xs text-gray-500">Del {ball.delivery_index}</span>
+                </span>
                 <div className="flex-1 space-y-2">
                   <select
-                    value={editBallOutcome[ball.ball_number] ?? ball.outcome}
+                    value={editBallOutcome[ball.id] ?? ball.outcome}
                     onChange={(e) => {
                       const value = e.target.value;
-                      setEditBallOutcome(prev => ({ ...prev, [ball.ball_number]: value }));
+                      setEditBallOutcome(prev => ({ ...prev, [ball.id]: value }));
                       if (value !== 'wicket') {
-                        setEditBallDismissalType(prev => ({ ...prev, [ball.ball_number]: '' }));
+                        setEditBallDismissalType(prev => ({ ...prev, [ball.id]: '' }));
                       }
                     }}
                     className="w-full bg-gray-700 border border-gray-600 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-yellow-400"
@@ -786,21 +1370,23 @@ export function VideoCapture() {
                     <option value="3">3</option>
                     <option value="4">4</option>
                     <option value="6">6</option>
+                    <option value="wide">Wide</option>
+                    <option value="noball">No ball</option>
                     <option value="wicket">Wicket</option>
                     <option value="other">Other</option>
                   </select>
-                  {(editBallOutcome[ball.ball_number] ?? ball.outcome) === 'wicket' && (
+                  {(editBallOutcome[ball.id] ?? ball.outcome) === 'wicket' && (
                     <select
-                      value={editBallDismissalType[ball.ball_number] ?? ball.dismissal_type ?? ''}
+                      value={editBallDismissalType[ball.id] ?? ball.dismissal_type ?? ''}
                       onChange={(e) =>
-                        setEditBallDismissalType(prev => ({ ...prev, [ball.ball_number]: e.target.value }))
+                        setEditBallDismissalType(prev => ({ ...prev, [ball.id]: e.target.value }))
                       }
                       className="w-full bg-gray-700 border border-gray-600 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-yellow-400"
                     >
                       <option value="">Select dismissal type</option>
-                      {DISMISSAL_TYPES.map((kind) => (
+                      {getDismissalOptionOrder().map((kind) => (
                         <option key={kind} value={kind}>
-                          {kind}
+                          {formatDismissalOptionLabel(kind)}
                         </option>
                       ))}
                     </select>
@@ -855,6 +1441,32 @@ export function VideoCapture() {
             </div>
 
             <div>
+              <div className="bg-gray-800/80 border border-cyan-500/70 rounded-lg p-3 mb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-cyan-300 text-xs font-semibold">AI Suggestion</div>
+                    <div className="text-gray-300 text-xs">
+                      {isAIScoring
+                        ? 'Analyzing audio...'
+                        : aiSuggestion
+                          ? `${aiSuggestion.outcome.toUpperCase()} (${Math.round(aiSuggestion.confidence * 100)}%)`
+                          : 'No suggestion yet'}
+                    </div>
+                    {aiSuggestion?.rationale && (
+                      <div className="text-[11px] text-gray-400 mt-1">{aiSuggestion.rationale}</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => aiSuggestion && applyAISuggestion(aiSuggestion)}
+                    disabled={!aiSuggestion || isAIScoring}
+                    className="bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-xs px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
               <label className="text-gray-400 text-sm mb-2 block">Outcome</label>
               <div className="grid grid-cols-4 gap-2 mb-3">
                 {['dot', '1', '2', '3'].map((outcome) => (
@@ -870,20 +1482,63 @@ export function VideoCapture() {
                     {outcome === 'dot' ? 'Dot' : outcome}
                   </button>
                 ))}
-                {['4', '6', 'wicket', 'other'].map((outcome) => (
+                {['4', '6', 'wicket', 'other', 'wide', 'noball'].map((outcome) => (
                   <button
                     key={outcome}
                     onClick={() => handleOutcomeSelect(outcome)}
                     className={`py-3 rounded-lg font-bold transition-colors ${
                       selectedOutcome === outcome
-                        ? outcome === 'wicket' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-black'
+                        ? outcome === 'wicket'
+                          ? 'bg-red-500 text-white'
+                          : outcome === 'wide' || outcome === 'noball'
+                            ? 'bg-orange-500 text-black'
+                            : 'bg-yellow-400 text-black'
                         : 'bg-gray-800 hover:bg-gray-700 text-white'
                     }`}
                   >
-                    {outcome === 'wicket' ? 'Wicket' : outcome === 'other' ? 'Other' : outcome}
+                    {outcome === 'wicket'
+                      ? 'Wicket'
+                      : outcome === 'other'
+                        ? 'Other'
+                        : outcome === 'wide'
+                          ? 'Wide'
+                          : outcome === 'noball'
+                            ? 'No ball'
+                            : outcome}
                   </button>
                 ))}
               </div>
+
+              {(selectedOutcome === 'wide' || selectedOutcome === 'noball') && (
+                <div className="mb-3">
+                  <label className="text-gray-400 text-xs mb-2 block">
+                    {selectedOutcome === 'wide' ? 'Wide runs' : 'No-ball runs'}
+                  </label>
+                  <input
+                    type="number"
+                    min={rules.wide_no_runs && selectedOutcome === 'wide' ? 0 : 0}
+                    max={12}
+                    step={1}
+                    value={selectedExtraRuns}
+                    onChange={(e) => {
+                      const n = Number.parseInt(e.target.value || '0', 10);
+                      const sanitized = Number.isFinite(n) ? Math.max(0, Math.min(12, n)) : 0;
+                      if (selectedOutcome === 'wide' && rules.wide_no_runs) {
+                        setSelectedExtraRuns(0);
+                        return;
+                      }
+                      setSelectedExtraRuns(sanitized);
+                    }}
+                    disabled={selectedOutcome === 'wide' && rules.wide_no_runs}
+                    className="w-full bg-gray-800 border border-gray-700 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-orange-400 disabled:opacity-60"
+                  />
+                  {selectedOutcome === 'wide' && rules.wide_no_runs && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Match config sets wides to 0 runs.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {selectedOutcome === 'wicket' && (
                 <div>
@@ -894,16 +1549,11 @@ export function VideoCapture() {
                     className="w-full bg-gray-800 border border-gray-700 text-white py-3 px-3 rounded-lg focus:outline-none focus:border-red-400"
                   >
                     <option value="">Select dismissal type</option>
-                    <option value="bowled">Bowled</option>
-                    <option value="caught">Caught</option>
-                    <option value="lbw">Leg Before Wicket (LBW)</option>
-                    <option value="runout">Run Out</option>
-                    <option value="stumped">Stumped</option>
-                    <option value="hitwicket">Hit Wicket</option>
-                    <option value="hitballtwice">Hit the Ball Twice</option>
-                    <option value="obstructing">Obstructing the Field</option>
-                    <option value="timedout">Timed Out</option>
-                    <option value="handledball">Handled the Ball</option>
+                    {getDismissalOptionOrder().map((kind) => (
+                      <option key={kind} value={kind}>
+                        {formatDismissalOptionLabel(kind)}
+                      </option>
+                    ))}
                   </select>
                 </div>
               )}

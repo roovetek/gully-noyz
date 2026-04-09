@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, Save, AlertCircle, CheckCircle, X, Trash2, List, Activity, Lock } from 'lucide-react';
+import { Settings, Save, AlertCircle, CheckCircle, X, Trash2, List, Activity, Lock, ShieldAlert } from 'lucide-react';
 import { DEFAULT_GLOBAL_RULES, getGlobalRules, updateGlobalRules } from '../lib/rulesEngine';
-import { validateGlobalAdminPasscodeResult } from '../lib/globalAdmin';
-import { changeGlobalAdminPasscode } from '../lib/globalAdmin';
+import { validateGlobalAdminPasscodeResult, changeGlobalAdminPasscode, resetMatchCredentials } from '../lib/globalAdmin';
 import { MatchRules } from '../lib/types';
 import { supabase } from '../lib/supabase';
+import { SecureStorage } from '../lib/security';
+import { STORAGE_KEYS } from '../lib/constants';
 import { getTestDataFilter } from '../lib/testDataFilter';
 import { deleteMatch } from '../lib/deleteMatch';
 import { getDeploymentInfo, validateDeploymentSync, DeploymentInfo } from '../lib/deploymentVersion';
+import { logger } from '../lib/logger';
+import { userFriendlyMessage } from '../lib/userFriendlyError';
 
 interface AdminDashboardProps {
   onClose?: () => void;
@@ -28,7 +31,15 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
   const [rules, setRules] = useState<MatchRules | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const [adminSection, setAdminSection] = useState<'rules' | 'matches' | 'deployment' | 'password'>('rules');
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
+  const [adminSection, setAdminSection] = useState<'rules' | 'matches' | 'deployment' | 'password' | 'recovery'>('rules');
+  const [recoveryMatchId, setRecoveryMatchId] = useState('');
+  const [recoverySecret, setRecoverySecret] = useState('');
+  const [recoveryUmpire, setRecoveryUmpire] = useState('');
+  const [recoveryScorer, setRecoveryScorer] = useState('');
+  const [recoveryConfirm, setRecoveryConfirm] = useState('');
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryFeedback, setRecoveryFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [adminMatches, setAdminMatches] = useState<AdminMatchRow[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesListError, setMatchesListError] = useState<string | null>(null);
@@ -75,14 +86,18 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
         setAdminSessionSecret(passcode.trim());
         setIsAuthenticated(true);
       } else if (result.kind === 'server') {
+        const friendly = userFriendlyMessage(result.message, {
+          fallback: 'Cannot reach admin services. Check your connection and Supabase settings.',
+        });
         setAuthError(
-          `Cannot reach admin services: ${result.message}. Check your Supabase URL and anon key in .env.local, then restart the dev server.`
+          `${friendly} If this persists, check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local and restart the dev server.`
         );
       } else {
         setAuthError('Invalid Admin Console passcode');
       }
     } catch (e) {
-      setAuthError(e instanceof Error ? e.message : 'Authentication failed');
+      logger.error('Admin auth failed', e);
+      setAuthError(userFriendlyMessage(e, { fallback: 'Authentication failed. Please try again.' }));
     } finally {
       setLoading(false);
     }
@@ -92,12 +107,17 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     if (!rules) return;
 
     setSaveStatus('saving');
+    setSaveErrorMessage(null);
 
     try {
       await updateGlobalRules(rules, 'global_admin', adminSessionSecret);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
+      logger.error('Failed to save global rules', error);
+      setSaveErrorMessage(
+        userFriendlyMessage(error, { fallback: 'Failed to save rules. Please try again.' })
+      );
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
@@ -132,7 +152,8 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     const { data, error } = await q;
     setMatchesLoading(false);
     if (error) {
-      setMatchesListError(error.message);
+      logger.error('Failed to load admin matches list', error);
+      setMatchesListError(userFriendlyMessage(error, { fallback: 'Could not load matches. Please try again.' }));
       setAdminMatches([]);
       return;
     }
@@ -175,6 +196,51 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     setTimeout(() => setDeleteSuccessMessage(null), 4000);
     closeDeleteModal();
     loadAdminMatches();
+  };
+
+  const handleRecovery = async () => {
+    setRecoveryFeedback(null);
+    const mid = recoveryMatchId.trim().toUpperCase();
+    if (!mid) {
+      setRecoveryFeedback({ type: 'err', text: 'Match ID is required.' });
+      return;
+    }
+    if (recoverySecret.trim().length < 6) {
+      setRecoveryFeedback({ type: 'err', text: 'New match secret must be at least 6 characters.' });
+      return;
+    }
+    if (recoveryUmpire.trim().length < 4) {
+      setRecoveryFeedback({ type: 'err', text: 'New umpire passcode must be at least 4 characters.' });
+      return;
+    }
+    if (recoveryScorer.trim().length < 4) {
+      setRecoveryFeedback({ type: 'err', text: 'New scorer passcode must be at least 4 characters.' });
+      return;
+    }
+    if (recoveryConfirm.trim().toUpperCase() !== mid) {
+      setRecoveryFeedback({ type: 'err', text: `Type ${mid} to confirm.` });
+      return;
+    }
+    setRecoveryBusy(true);
+    const result = await resetMatchCredentials({
+      matchId: mid,
+      adminPasscode: adminSessionSecret,
+      newMatchSecret: recoverySecret,
+      newUmpirePasscode: recoveryUmpire,
+      newScorerPasscode: recoveryScorer,
+    });
+    setRecoveryBusy(false);
+    if (!result.ok) {
+      setRecoveryFeedback({ type: 'err', text: result.message });
+      return;
+    }
+    SecureStorage.setItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${mid}`, recoverySecret.trim());
+    setRecoveryFeedback({ type: 'ok', text: `Credentials for ${mid} updated successfully.` });
+    setRecoveryMatchId('');
+    setRecoverySecret('');
+    setRecoveryUmpire('');
+    setRecoveryScorer('');
+    setRecoveryConfirm('');
   };
 
   const handleDashboardPasswordChange = async () => {
@@ -316,6 +382,20 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
               <span className="inline-flex items-center gap-2">
                 <Lock size={16} />
                 Change Password
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdminSection('recovery')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                adminSection === 'recovery'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <ShieldAlert size={16} />
+                Match Recovery
               </span>
             </button>
           </div>
@@ -576,7 +656,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
           {saveStatus === 'error' && adminSection === 'rules' && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
               <AlertCircle size={16} />
-              Failed to save rules. Please try again.
+              {saveErrorMessage ?? 'Failed to save rules. Please try again.'}
             </div>
           )}
 
@@ -664,6 +744,98 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                 className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 disabled:opacity-50"
               >
                 {dashPwSaving ? 'Updating…' : 'Update Password'}
+              </button>
+            </div>
+          )}
+
+          {adminSection === 'recovery' && (
+            <div className="border border-red-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2 text-red-700 font-semibold">
+                <ShieldAlert size={18} />
+                Match Recovery
+              </div>
+              <p className="text-xs text-gray-500">
+                Replaces the match secret, umpire passcode, and scorer passcode for any match. All
+                participants must use the new values after this. Your admin session password is used
+                to authorise the reset.
+              </p>
+              <div className="space-y-3 max-w-md">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Match ID</label>
+                  <input
+                    type="text"
+                    value={recoveryMatchId}
+                    onChange={(e) => { setRecoveryMatchId(e.target.value.toUpperCase()); setRecoveryFeedback(null); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono uppercase"
+                    placeholder="e.g. MATCH01"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">New match secret (min 6 chars)</label>
+                  <input
+                    type="password"
+                    value={recoverySecret}
+                    onChange={(e) => { setRecoverySecret(e.target.value); setRecoveryFeedback(null); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">New umpire passcode (min 4)</label>
+                  <input
+                    type="password"
+                    value={recoveryUmpire}
+                    onChange={(e) => { setRecoveryUmpire(e.target.value); setRecoveryFeedback(null); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">New scorer passcode (min 4)</label>
+                  <input
+                    type="password"
+                    value={recoveryScorer}
+                    onChange={(e) => { setRecoveryScorer(e.target.value); setRecoveryFeedback(null); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Confirm — type the match ID to proceed
+                  </label>
+                  <input
+                    type="text"
+                    value={recoveryConfirm}
+                    onChange={(e) => { setRecoveryConfirm(e.target.value.toUpperCase()); setRecoveryFeedback(null); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono uppercase"
+                    placeholder={recoveryMatchId || 'MATCH ID'}
+                  />
+                </div>
+              </div>
+              {recoveryFeedback && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    recoveryFeedback.type === 'ok' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
+                  }`}
+                >
+                  {recoveryFeedback.text}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleRecovery}
+                disabled={
+                  recoveryBusy ||
+                  !recoveryMatchId.trim() ||
+                  !recoverySecret.trim() ||
+                  !recoveryUmpire.trim() ||
+                  !recoveryScorer.trim() ||
+                  !recoveryConfirm.trim()
+                }
+                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {recoveryBusy ? 'Updating…' : 'Reset match credentials'}
               </button>
             </div>
           )}

@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestMatch, createTestClip, cleanupTestData } from '../helpers/factories';
 import { supabase } from '../../src/lib/supabase';
 
-describe('Match Deletion Integration', () => {
+const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
+const describeIntegration = runIntegration ? describe : describe.skip;
+
+describeIntegration('Match Deletion Integration', () => {
   beforeEach(async () => {
     await cleanupTestData();
   });

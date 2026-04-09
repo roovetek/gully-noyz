@@ -1,4 +1,5 @@
 import { executeTrackedAction, supabase } from './supabase';
+import { userFriendlyMessage } from './userFriendlyError';
 
 export async function completeMatch(
   matchId: string,
@@ -26,7 +27,9 @@ export async function completeMatch(
   });
 
   if (matchError) {
-    throw new Error(`Failed to update match status: ${matchError.message}`);
+    throw new Error(
+      userFriendlyMessage(matchError, { fallback: 'Could not update match status. Please try again.' })
+    );
   }
 
   const { error: resultError } = await executeTrackedAction({
@@ -45,7 +48,9 @@ export async function completeMatch(
   });
 
   if (resultError) {
-    throw new Error(`Failed to create match result: ${resultError.message}`);
+    throw new Error(
+      userFriendlyMessage(resultError, { fallback: 'Could not save match result. Please try again.' })
+    );
   }
 }
 
@@ -120,6 +125,8 @@ export async function deleteLastBall(matchId: string, innings: number): Promise<
   });
 
   if (deleteError) {
-    throw new Error(`Failed to delete ball: ${deleteError.message}`);
+    throw new Error(
+      userFriendlyMessage(deleteError, { fallback: 'Could not delete ball. Please try again.' })
+    );
   }
 }

@@ -33,6 +33,25 @@ export function calculateRuns(
   return { totalRuns, effectiveExtraRuns };
 }
 
+export function parseBaseRuns(outcome: string): number {
+  const n = Number.parseInt(outcome, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function resolveBallScoring(
+  outcome: BallOutcome,
+  rules: MatchRules,
+  baseRuns: number,
+  extraRuns: number
+): { totalRuns: number; effectiveExtraRuns: number; validBall: boolean } {
+  const { totalRuns, effectiveExtraRuns } = calculateRuns(outcome, baseRuns, extraRuns, rules);
+  return {
+    totalRuns,
+    effectiveExtraRuns,
+    validBall: isValidBall(outcome, rules),
+  };
+}
+
 export function getOverBallDisplay(validBallCount: number, ballsPerOver: number): string {
   const completedOvers = Math.floor(validBallCount / ballsPerOver);
   const ballsInCurrentOver = validBallCount % ballsPerOver;

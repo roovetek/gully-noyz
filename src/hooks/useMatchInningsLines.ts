@@ -37,7 +37,7 @@ export function useMatchInningsLines(matchId: string | null) {
     const testDataFilter = getTestDataFilter();
     let q = supabase
       .from('clips')
-      .select('outcome, dismissal_type, over_number, ball_number, innings_number')
+      .select('outcome, dismissal_type, over_number, ball_number, innings_number, extra_runs, is_valid_ball')
       .eq('match_id', matchId);
 
     if (testDataFilter !== undefined) {

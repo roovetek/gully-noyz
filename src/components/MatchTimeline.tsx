@@ -4,6 +4,7 @@ import { supabase, Clip } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { getTestDataFilter } from '../lib/testDataFilter';
 import { calculateInningsOversDisplay } from '../lib/match';
+import { formatDismissalOptionLabel } from '../lib/dismissalOptions';
 
 export function MatchTimeline() {
   const { matchId } = useMatch();
@@ -47,7 +48,7 @@ export function MatchTimeline() {
                 if (b.over_number !== a.over_number) {
                   return b.over_number - a.over_number;
                 }
-                return b.ball_number - a.ball_number;
+                return (b.delivery_index ?? b.ball_number) - (a.delivery_index ?? a.ball_number);
               });
             });
           } else if (payload.eventType === 'DELETE') {
@@ -80,7 +81,7 @@ export function MatchTimeline() {
       .select('balls_per_over')
       .eq('match_id', matchId)
       .maybeSingle();
-    if (matchRow?.balls_per_over != null && matchRow.balls_per_over > 0) {
+    if (matchRow?.balls_per_over !== null && matchRow.balls_per_over > 0) {
       setBallsPerOver(matchRow.balls_per_over);
     }
 
@@ -97,6 +98,7 @@ export function MatchTimeline() {
     const { data, error } = await clipsQuery
       .order('innings_number', { ascending: false })
       .order('over_number', { ascending: false })
+      .order('delivery_index', { ascending: false })
       .order('ball_number', { ascending: false });
 
     if (error) {
@@ -111,7 +113,7 @@ export function MatchTimeline() {
       if (selectedOver) {
         const balls = filteredData
           .filter(clip => clip.over_number === selectedOver)
-          .map(clip => clip.ball_number)
+          .map(clip => clip.delivery_index ?? clip.ball_number)
           .sort((a, b) => b - a);
         setAvailableBalls(balls);
       }
@@ -127,7 +129,7 @@ export function MatchTimeline() {
     if (selectedOver && clips.length > 0) {
       const balls = clips
         .filter(clip => clip.innings_number === selectedInnings && clip.over_number === selectedOver)
-        .map(clip => clip.ball_number)
+        .map(clip => clip.delivery_index ?? clip.ball_number)
         .sort((a, b) => b - a);
       setAvailableBalls(balls);
     } else {
@@ -138,7 +140,10 @@ export function MatchTimeline() {
   const handleNavigate = () => {
     if (selectedOver !== null && selectedBall !== null) {
       const targetClip = clips.find(
-        clip => clip.innings_number === selectedInnings && clip.over_number === selectedOver && clip.ball_number === selectedBall
+        clip =>
+          clip.innings_number === selectedInnings &&
+          clip.over_number === selectedOver &&
+          (clip.delivery_index ?? clip.ball_number) === selectedBall
       );
 
       if (targetClip) {
@@ -168,14 +173,13 @@ export function MatchTimeline() {
   const formatOutcome = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) => {
     if (clip.outcome === 'wicket') {
       if (clip.dismissal_type) {
-        const label =
-          clip.dismissal_type === 'unknown'
-            ? 'Unknown'
-            : clip.dismissal_type.charAt(0).toUpperCase() + clip.dismissal_type.slice(1);
+        const label = formatDismissalOptionLabel(clip.dismissal_type);
         return `Wicket (${label})`;
       }
       return 'Wicket';
     }
+    if (clip.outcome === 'wide') return 'Wide';
+    if (clip.outcome === 'noball') return 'No ball';
     return clip.outcome === 'dot' ? 'Dot' : clip.outcome;
   };
 
@@ -191,10 +195,38 @@ export function MatchTimeline() {
       case 'Dot':
       case 'dot':
         return 'text-gray-400 bg-gray-500/20 border-gray-500';
+      case 'wide':
+      case 'noball':
+        return 'text-orange-400 bg-orange-500/20 border-orange-500';
       default:
         if (isWicketBall(clip)) return 'text-red-400 bg-red-500/20 border-red-500';
         return 'text-yellow-400 bg-yellow-500/20 border-yellow-500';
     }
+  };
+
+  const getHitSeconds = (clip: Pick<Clip, 'hit_timestamp_ms'>): number | null => {
+    if (clip.hit_timestamp_ms === null || clip.hit_timestamp_ms < 0) return null;
+    return clip.hit_timestamp_ms / 1000;
+  };
+
+  const handleVideoLoadedMetadata = (videoElement: HTMLVideoElement, clip: Clip) => {
+    const hitSeconds = getHitSeconds(clip);
+    if (hitSeconds === null || Number.isNaN(videoElement.duration) || videoElement.duration <= 0) return;
+    const seekTime = Math.min(hitSeconds, Math.max(videoElement.duration - 0.05, 0));
+    videoElement.currentTime = seekTime;
+  };
+
+  const jumpToHit = (clipId: string, clip: Clip) => {
+    const hitSeconds = getHitSeconds(clip);
+    if (hitSeconds === null) return;
+    const videoElement = document.getElementById(`video-${clipId}`) as HTMLVideoElement | null;
+    if (!videoElement) return;
+    const duration = videoElement.duration;
+    const targetTime = Number.isFinite(duration) && duration > 0
+      ? Math.min(hitSeconds, Math.max(duration - 0.05, 0))
+      : hitSeconds;
+    videoElement.currentTime = targetTime;
+    void videoElement.play();
   };
 
   if (loading) {
@@ -228,17 +260,13 @@ export function MatchTimeline() {
 
   const getTotalRuns = () => {
     return filteredClips.reduce((total, clip) => {
-      const runs = parseInt(clip.outcome);
-      return total + (isNaN(runs) ? 0 : runs);
+      const baseRuns = Number.parseInt(clip.outcome, 10);
+      return total + (Number.isFinite(baseRuns) ? baseRuns : 0) + (clip.extra_runs ?? 0);
     }, 0);
   };
 
   const getTotalWickets = () => {
     return filteredClips.filter(isWicketBall).length;
-  };
-
-  const getTotalBalls = () => {
-    return filteredClips.length;
   };
 
   const getTotalOvers = () => calculateInningsOversDisplay(filteredClips, ballsPerOver);
@@ -309,7 +337,7 @@ export function MatchTimeline() {
             >
               <option value="">Select Ball</option>
               {availableBalls.map(ball => (
-                <option key={ball} value={ball}>Ball {ball}</option>
+                <option key={ball} value={ball}>Delivery {ball}</option>
               ))}
             </select>
             <button
@@ -346,6 +374,7 @@ export function MatchTimeline() {
                   controls
                   playsInline
                   preload="metadata"
+                  onLoadedMetadata={(event) => handleVideoLoadedMetadata(event.currentTarget, clip)}
                   onPlay={() => setPlayingClipId(clip.id)}
                   onPause={() => setPlayingClipId(null)}
                 />
@@ -361,6 +390,34 @@ export function MatchTimeline() {
                 )}
               </div>
 
+              {clip.hit_timestamp_ms !== null && (
+                <div className="px-4 pt-3">
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                    <span>Bat-hit marker</span>
+                    <button
+                      onClick={() => jumpToHit(clip.id, clip)}
+                      className="text-cyan-300 hover:text-cyan-200 underline"
+                    >
+                      Jump to hit ({(clip.hit_timestamp_ms / 1000).toFixed(2)}s)
+                    </button>
+                  </div>
+                  <div className="relative h-1.5 rounded bg-gray-700 overflow-hidden">
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-cyan-300"
+                      style={{
+                        left: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            ((clip.hit_timestamp_ms / 1000) / Math.max(clip.duration || 1, 0.1)) * 100
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -373,6 +430,9 @@ export function MatchTimeline() {
                       <span className="text-gray-400"> - </span>
                       <span className="text-sm text-gray-400">Ball </span>
                       <span className="text-white font-bold">{clip.ball_number}</span>
+                      <span className="text-gray-500 text-xs ml-2">
+                        (Del {clip.delivery_index ?? clip.ball_number})
+                      </span>
                     </div>
 
                     <div

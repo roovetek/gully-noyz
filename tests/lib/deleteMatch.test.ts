@@ -69,6 +69,8 @@ describe('deleteMatch', () => {
     hoisted.rpc.mockResolvedValue({ data: null, error: { message: 'rpc failed' } });
     const r = await deleteMatch('ZZ99AA', 'x');
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.message).toContain('rpc failed');
+    if (!r.ok) {
+      expect(r.message).toMatch(/something went wrong|try again/i);
+    }
   });
 });

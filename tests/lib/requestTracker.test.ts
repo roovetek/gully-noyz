@@ -1,38 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const auditRpc = vi.hoisted(() => vi.fn());
-
-vi.mock('../../src/lib/supabase', async () => {
-  const actual = await vi.importActual<typeof import('../../src/lib/supabase')>('../../src/lib/supabase');
-
-  auditRpc.mockImplementation((name: string) => {
-    if (name === 'audit_log_create' || name === 'audit_log_update') {
-      return Promise.resolve({ data: { ok: true }, error: null });
-    }
-    return Promise.resolve({ data: null, error: null });
-  });
-
-  return {
-    ...actual,
-    supabase: {
-      ...actual.supabase,
-      rpc: auditRpc,
-    },
-    isAuditLoggingEnabled: true,
-  };
-});
-
-import { executeTrackedAction, sanitizeAuditPayload } from '../../src/lib/supabase';
+import { executeTrackedAction, sanitizeAuditPayload, supabase } from '../../src/lib/supabase';
 
 describe('executeTrackedAction', () => {
+  const auditRpc = vi.spyOn(supabase, 'rpc');
+
   beforeEach(() => {
     vi.clearAllMocks();
-    auditRpc.mockImplementation((name: string) => {
+    auditRpc.mockImplementation(((name: string) => {
       if (name === 'audit_log_create' || name === 'audit_log_update') {
-        return Promise.resolve({ data: { ok: true }, error: null });
+        return Promise.resolve({ data: { ok: true }, error: null } as any);
       }
-      return Promise.resolve({ data: null, error: null });
-    });
+      return Promise.resolve({ data: null, error: null } as any);
+    }) as any);
   });
 
   it('redacts sensitive values and summarizes binary payloads', () => {

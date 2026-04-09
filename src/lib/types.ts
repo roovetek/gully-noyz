@@ -82,6 +82,7 @@ export interface Clip {
 }
 
 export type BallOutcome =
+  | '0'
   | 'dot'
   | '1'
   | '2'
@@ -89,6 +90,7 @@ export type BallOutcome =
   | '4'
   | '6'
   | 'wicket'
+  | 'other'
   | 'wide'
   | 'noball'
   | 'bye'

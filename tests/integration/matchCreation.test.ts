@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { supabase } from '../../src/lib/supabase';
 import { cleanupTestData } from '../helpers/factories';
 
-describe('Match Creation Integration', () => {
+const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
+const describeIntegration = runIntegration ? describe : describe.skip;
+
+describeIntegration('Match Creation Integration', () => {
   beforeEach(async () => {
     await cleanupTestData();
   });

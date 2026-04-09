@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { userFriendlyMessage } from './userFriendlyError';
 
 const rawUrl = import.meta.env.VITE_SUPABASE_URL;
 const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -63,21 +64,6 @@ function toSerializableError(error: unknown): Record<string, unknown> {
   };
 }
 
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) {
-      return message;
-    }
-  }
-
-  return String(error);
-}
-
 function getResultStatusCode(result: unknown): 'success' | 'error' {
   if (!result || typeof result !== 'object') {
     return 'success';
@@ -94,6 +80,49 @@ function getResultStatusCode(result: unknown): 'success' | 'error' {
   }
 
   return 'success';
+}
+
+function auditResponseBody(result: unknown, statusCode: 'success' | 'error' | 'pending'): unknown {
+  const base = sanitizeAuditPayload(result);
+  if (statusCode !== 'error' || !result || typeof result !== 'object') {
+    return base;
+  }
+  const r = result as { error?: unknown; data?: unknown };
+  let friendlySource: unknown = r.error;
+  if (
+    (friendlySource === undefined || friendlySource === null) &&
+    r.data &&
+    typeof r.data === 'object' &&
+    r.data !== null
+  ) {
+    const d = r.data as { error?: unknown; ok?: boolean };
+    if (d.ok === false && d.error !== undefined && d.error !== null) {
+      friendlySource = d.error;
+    }
+  }
+  if (friendlySource === undefined || friendlySource === null) {
+    return base;
+  }
+  const friendly = userFriendlyMessage(
+    typeof friendlySource === 'string' ? { message: friendlySource } : friendlySource
+  );
+  if (typeof base === 'object' && base !== null && !Array.isArray(base)) {
+    return {
+      ...(base as Record<string, unknown>),
+      user_friendly_message: friendly,
+    };
+  }
+  return {
+    raw: base,
+    user_friendly_message: friendly,
+  };
+}
+
+function auditThrownErrorBody(error: unknown): Record<string, unknown> {
+  return {
+    ...toSerializableError(error),
+    user_friendly_message: userFriendlyMessage(error),
+  };
 }
 
 export function sanitizeAuditPayload(value: unknown, depth = 0): unknown {
@@ -141,7 +170,8 @@ export function sanitizeAuditPayload(value: unknown, depth = 0): unknown {
   }
 
   if (typeof value === 'function') {
-    return `[Function ${(value as Function).name || 'anonymous'}]`;
+    const fnName = (value as { name?: string }).name || 'anonymous';
+    return `[Function ${fnName}]`;
   }
 
   return value;
@@ -180,7 +210,7 @@ export async function executeTrackedAction<T>({
     try {
       await supabase.rpc('audit_log_update', {
         p_trace_id: traceId,
-        p_response_body: sanitizeAuditPayload(result),
+        p_response_body: auditResponseBody(result, statusCode),
         p_status_code: statusCode,
       });
     } catch (auditUpdateError) {
@@ -192,7 +222,7 @@ export async function executeTrackedAction<T>({
     try {
       await supabase.rpc('audit_log_update', {
         p_trace_id: traceId,
-        p_response_body: toSerializableError(error),
+        p_response_body: auditThrownErrorBody(error),
         p_status_code: 'error',
       });
     } catch (auditUpdateError) {
@@ -209,9 +239,16 @@ export interface Clip {
   innings_number: number;
   over_number: number;
   ball_number: number;
+  delivery_index?: number;
   outcome: string;
   dismissal_type: string | null;
+  extra_runs?: number;
+  is_valid_ball?: boolean;
   video_url: string | null;
   duration: number;
+  trim_start_ms?: number | null;
+  trim_end_ms?: number | null;
+  hit_timestamp_ms?: number | null;
+  is_highlight?: boolean | null;
   created_at: string;
 }

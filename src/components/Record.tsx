@@ -7,14 +7,15 @@ export function Record() {
   const { matchId } = useMatch();
 
   return (
-    <div className="fixed inset-0 bg-black text-white flex flex-col pt-16 pb-20">
+    <div className="flex w-full flex-1 min-h-0 flex-col bg-black pb-20 text-white">
       {matchId && (
         <MatchPageSummaryStrip>
           <MatchHeaderSummary variant="solid" showNameEdit />
         </MatchPageSummaryStrip>
       )}
 
-      <div className="flex-1 min-h-0 relative">
+      {/* In-flow layout (not position:fixed) so flex height reaches VideoCapture; fixed was collapsing h-full on some viewports */}
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         <VideoCapture />
       </div>
     </div>

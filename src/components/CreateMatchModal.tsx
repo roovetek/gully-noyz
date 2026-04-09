@@ -9,6 +9,7 @@ import { getGlobalRules } from '../lib/rulesEngine';
 import { createMatchAccess } from '../lib/accessControl';
 import { MatchRules } from '../lib/types';
 import { logger } from '../lib/logger';
+import { userFriendlyMessage } from '../lib/userFriendlyError';
 
 interface CreateMatchModalProps {
   onClose: () => void;
@@ -104,8 +105,8 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
 
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_CREATE;
-      setError(errorMessage);
+      logger.error('Create match failed', err);
+      setError(userFriendlyMessage(err, { fallback: ERROR_MESSAGES.FAILED_TO_CREATE }));
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { executeTrackedAction, supabase } from './supabase';
+import { userFriendlyMessage } from './userFriendlyError';
 
 const LEGACY_LS_KEY = 'admin_passcode_hash';
 
@@ -10,7 +11,7 @@ async function getGlobalAdminConfigured(): Promise<ConfigStatus> {
   const { data, error } = await supabase.rpc('is_global_admin_password_configured');
   if (error) {
     console.error('is_global_admin_password_configured failed', error);
-    return { ok: false, message: error.message };
+    return { ok: false, message: userFriendlyMessage(error) };
   }
   return { ok: true, configured: Boolean(data) };
 }
@@ -78,7 +79,7 @@ export async function validateGlobalAdminPasscodeResult(
     });
     if (error) {
       console.error('bootstrap_global_admin_passcode failed', error);
-      return { ok: false, kind: 'server', message: error.message };
+      return { ok: false, kind: 'server', message: userFriendlyMessage(error) };
     }
     const row = data as { ok?: boolean } | null;
     const bootOk = Boolean(row?.ok);
@@ -104,7 +105,7 @@ export async function validateGlobalAdminPasscodeResult(
   });
   if (verifyError) {
     console.error('verify_global_admin_passcode failed', verifyError);
-    return { ok: false, kind: 'server', message: verifyError.message };
+    return { ok: false, kind: 'server', message: userFriendlyMessage(verifyError) };
   }
   if (valid && typeof window !== 'undefined') {
     try {
@@ -137,13 +138,16 @@ export async function changeGlobalAdminPasscode(
       }),
   });
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: userFriendlyMessage(error) };
   }
   const row = data as { ok?: boolean; error?: string } | null;
   if (row?.ok) {
     return { ok: true };
   }
-  return { ok: false, message: row?.error || 'Failed to change password.' };
+  return {
+    ok: false,
+    message: userFriendlyMessage(row?.error, { fallback: 'Failed to change password.' }),
+  };
 }
 
 export interface ResetMatchCredentialsInput {
@@ -173,11 +177,14 @@ export async function resetMatchCredentials(
       }),
   });
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: userFriendlyMessage(error) };
   }
   const row = data as { ok?: boolean; error?: string } | null;
   if (row?.ok) {
     return { ok: true };
   }
-  return { ok: false, message: row?.error || 'Failed to reset match credentials.' };
+  return {
+    ok: false,
+    message: userFriendlyMessage(row?.error, { fallback: 'Failed to reset match credentials.' }),
+  };
 }

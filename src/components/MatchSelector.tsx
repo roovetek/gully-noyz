@@ -214,7 +214,7 @@ export function MatchSelector({ onOpenGullyRulz }: MatchSelectorProps) {
 
           <button
             onClick={() => setShowMatchList(true)}
-            className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors border border-gray-700"
+            className="w-full bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors border border-orange-400"
           >
             <List size={24} />
             <span className="text-lg">Browse All Matches</span>

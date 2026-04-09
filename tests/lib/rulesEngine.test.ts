@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   getGlobalRules,
-  updateGlobalRules,
   getEffectiveRules,
   applyOverride,
 } from '../../src/lib/rulesEngine';
 import { createTestMatch, cleanupTestData } from '../helpers/factories';
 
-describe('rulesEngine', () => {
+const runIntegration = process.env.RUN_INTEGRATION_TESTS === 'true';
+const describeIntegration = runIntegration ? describe : describe.skip;
+
+describeIntegration('rulesEngine', () => {
   beforeEach(async () => {
     await cleanupTestData();
   });
