@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>QA Harness Report</title>
+  <style>
+    body{font-family:Inter,system-ui,sans-serif;background:#05070d;color:#e5e7eb;margin:0;padding:24px}
+    h1,h2{margin:0 0 12px}
+    .small{color:#9ca3af;font-size:12px}
+    .block{background:#0f172a;border:1px solid #1f2937;border-radius:10px;padding:16px;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border-bottom:1px solid #1f2937;padding:8px;text-align:left;vertical-align:top}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:10px;overflow:hidden}
+    .card img{width:100%;display:block}
+    .meta{padding:10px}
+    .title{font-weight:600}
+    .action{font-size:12px;color:#9ca3af;margin-top:4px}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  </style>
+</head>
+<body>
+  <h1>QA Harness Report</h1>
+  <div class="small">Run ID: qa-harness-2026-04-10T03-43-11-928Z | Generated: 2026-04-10T04:00:39.894Z</div>
+  <div class="block">
+    <h2>Command Results</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Status</th><th>Duration</th><th>Command</th><th>Log</th></tr></thead>
+      <tbody><tr><td>schema-local</td><td>PASS</td><td>8.2s</td><td><code>npm run test:schema:local</code></td><td><code>runs/qa-harness-2026-04-10T03-43-11-928Z/logs/schema-local.log</code></td></tr>
+<tr><td>vitest</td><td>PASS</td><td>1.6s</td><td><code>npm run test:run</code></td><td><code>runs/qa-harness-2026-04-10T03-43-11-928Z/logs/vitest.log</code></td></tr>
+<tr><td>playwright</td><td>FAIL</td><td>1034.1s</td><td><code>npx playwright test --project=chrome-system-lite</code></td><td><code>runs/qa-harness-2026-04-10T03-43-11-928Z/logs/playwright.log</code></td></tr></tbody>
+    </table>
+  </div>
+  <div class="block">
+    <h2>UI Screenshot Sequence</h2>
+    <div class="grid">
+      <div class="card">
+        <img src="./screenshots/01-landing.png" alt="Landing Page" />
+        <div class="meta">
+          <div class="title">1. Landing Page</div>
+          <div class="action">Opened home route</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="./screenshots/02-create-modal.png" alt="Create Match Modal" />
+        <div class="meta">
+          <div class="title">2. Create Match Modal</div>
+          <div class="action">Clicked Create Match on landing</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="./screenshots/03-record.png" alt="Record Tab" />
+        <div class="meta">
+          <div class="title">3. Record Tab</div>
+          <div class="action">Created match and landed in record view</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="./screenshots/04-timeline.png" alt="Timeline Tab" />
+        <div class="meta">
+          <div class="title">4. Timeline Tab</div>
+          <div class="action">Switched to Timeline from bottom nav</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="./screenshots/05-stats.png" alt="Stats Tab" />
+        <div class="meta">
+          <div class="title">5. Stats Tab</div>
+          <div class="action">Switched to Stats from bottom nav</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="./screenshots/06-config.png" alt="Config Tab" />
+        <div class="meta">
+          <div class="title">6. Config Tab</div>
+          <div class="action">Switched to Config from bottom nav</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="./screenshots/07-admin.png" alt="Admin Backdoor" />
+        <div class="meta">
+          <div class="title">7. Admin Backdoor</div>
+          <div class="action">Navigated directly to hidden admin hash route</div>
+        </div>
+      </div></div>
+  </div>
+</body>
+</html>

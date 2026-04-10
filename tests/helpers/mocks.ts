@@ -30,6 +30,15 @@ export function mockSupabaseClient() {
         subscribe: vi.fn(),
       })),
     })),
+    rpc: vi.fn(),
+    storage: {
+      from: vi.fn(() => ({
+        list: vi.fn().mockResolvedValue({ data: [], error: null }),
+        remove: vi.fn().mockResolvedValue({ error: null }),
+        upload: vi.fn().mockResolvedValue({ error: null }),
+        getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'https://example.com/clip.webm' } })),
+      })),
+    },
     removeChannel: vi.fn(),
   };
 }

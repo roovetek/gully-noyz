@@ -129,7 +129,10 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div
+      data-testid="create-match-modal"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto"
+    >
       <div className="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-2xl my-8">
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
           <h2 className="text-xl font-bold text-yellow-400">Create New Match</h2>
@@ -161,6 +164,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
               <h3 className="text-sm font-semibold text-gray-200">Match Rules</h3>
               <button
                 onClick={() => setCustomizeRules(!customizeRules)}
+                aria-label="Toggle customize rules"
                 className="flex items-center gap-2 text-sm text-yellow-400 hover:text-yellow-300"
               >
                 <Settings size={16} />
@@ -184,6 +188,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Overs per innings</label>
                   <input
+                    data-testid="rules-overs-per-innings-input"
                     type="number"
                     value={rules.overs_per_innings}
                     onChange={(e) => updateRule('overs_per_innings', parseInt(e.target.value))}
@@ -195,6 +200,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Balls per over</label>
                   <input
+                    data-testid="rules-balls-per-over-input"
                     type="number"
                     value={rules.balls_per_over}
                     onChange={(e) => updateRule('balls_per_over', parseInt(e.target.value))}
@@ -206,6 +212,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Max wickets</label>
                   <input
+                    data-testid="rules-max-wickets-input"
                     type="number"
                     value={rules.max_wickets}
                     onChange={(e) => updateRule('max_wickets', parseInt(e.target.value))}
@@ -217,6 +224,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Max overs per bowler</label>
                   <input
+                    data-testid="rules-max-overs-per-bowler-input"
                     type="number"
                     value={rules.max_overs_per_bowler}
                     onChange={(e) => updateRule('max_overs_per_bowler', parseInt(e.target.value))}
@@ -260,6 +268,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
               <label className="flex items-center cursor-pointer">
                 <input
                   type="checkbox"
+                  aria-label="Private match toggle"
                   checked={isPrivate}
                   onChange={(e) => setIsPrivate(e.target.checked)}
                   className="mr-2"
@@ -306,6 +315,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
             <button
               onClick={handleCreate}
               disabled={loading}
+              data-testid="create-match-submit"
               className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-black py-3 rounded-lg font-bold transition-colors disabled:opacity-50"
             >
               {loading ? 'Creating...' : 'Create Match'}

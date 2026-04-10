@@ -1,11 +1,12 @@
 /** Hash-based app locations (no server rewrite needed). */
 
 export type MainTab = 'record' | 'timeline' | 'stats' | 'info';
-export type AppTab = MainTab | 'gullyRulz' | 'admin';
+export type AppTab = MainTab | 'gullyRulz' | 'admin' | 'qa';
 
 export function hashFromAppState(matchId: string | null, activeTab: AppTab): string {
   if (activeTab === 'admin') return '#/admin';
   if (activeTab === 'gullyRulz') return '#/gully-rulz';
+  if (activeTab === 'qa') return '#/qa';
   if (!matchId) return '#/';
   if (activeTab === 'record' || activeTab === 'timeline' || activeTab === 'stats' || activeTab === 'info') {
     return `#/m/${matchId}/${activeTab}`;
@@ -16,6 +17,7 @@ export function hashFromAppState(matchId: string | null, activeTab: AppTab): str
 export type ParsedHash =
   | { kind: 'landing' }
   | { kind: 'admin' }
+  | { kind: 'qa' }
   | { kind: 'gullyRulz' }
   | { kind: 'match'; matchId: string; tab: MainTab };
 
@@ -27,6 +29,7 @@ export function parseAppHash(): ParsedHash {
   if (segments.length === 0) return { kind: 'landing' };
 
   if (segments[0] === 'admin') return { kind: 'admin' };
+  if (segments[0] === 'qa') return { kind: 'qa' };
   if (segments[0] === 'gully-rulz') return { kind: 'gullyRulz' };
 
   if (segments[0] === 'm' && segments[1]) {

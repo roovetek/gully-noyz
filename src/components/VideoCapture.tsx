@@ -1165,6 +1165,8 @@ export function VideoCapture() {
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-cyan-300 font-semibold">AI Assist</span>
             <select
+              data-testid="ai-assist-mode-select"
+              aria-label="AI assist mode"
               value={aiMode}
               onChange={(e) => {
                 const nextMode = e.target.value as AIScoringMode;
@@ -1256,6 +1258,8 @@ export function VideoCapture() {
           {!isRecording && !showDrawer && !inningsComplete && !overCompleteData && (
             <button
               onClick={handleSkipRecording}
+              aria-label="Log outcome without recording"
+              data-testid="skip-recording-button"
               className="w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 flex items-center justify-center transition-all shadow-lg"
               title="Log outcome without recording"
             >
@@ -1281,6 +1285,7 @@ export function VideoCapture() {
           <div className="flex flex-col gap-3">
             <button
               onClick={handleOverConfirm}
+              data-testid="confirm-over-continue-button"
               className="w-full bg-green-500 hover:bg-green-600 text-black font-bold py-4 rounded-lg transition-colors"
             >
               Confirm &amp; Continue
@@ -1413,7 +1418,10 @@ export function VideoCapture() {
       )}
 
       {showDrawer && (
-        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-green-400 rounded-t-2xl p-6 pb-24 z-20 animate-slide-up">
+        <div
+          data-testid="manual-outcome-drawer"
+          className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-green-400 rounded-t-2xl p-6 pb-24 z-20 animate-slide-up"
+        >
           <div className="flex justify-center mb-4">
             <ChevronUp size={32} className="text-gray-600" />
           </div>
@@ -1472,6 +1480,7 @@ export function VideoCapture() {
                 {['dot', '1', '2', '3'].map((outcome) => (
                   <button
                     key={outcome}
+                    aria-label={`Outcome ${outcome === 'dot' ? 'Dot' : outcome}`}
                     onClick={() => handleOutcomeSelect(outcome)}
                     className={`py-3 rounded-lg font-bold transition-colors ${
                       selectedOutcome === outcome
@@ -1485,6 +1494,7 @@ export function VideoCapture() {
                 {['4', '6', 'wicket', 'other', 'wide', 'noball'].map((outcome) => (
                   <button
                     key={outcome}
+                    aria-label={`Outcome ${outcome}`}
                     onClick={() => handleOutcomeSelect(outcome)}
                     className={`py-3 rounded-lg font-bold transition-colors ${
                       selectedOutcome === outcome
@@ -1515,6 +1525,7 @@ export function VideoCapture() {
                     {selectedOutcome === 'wide' ? 'Wide runs' : 'No-ball runs'}
                   </label>
                   <input
+                    data-testid="extra-runs-input"
                     type="number"
                     min={rules.wide_no_runs && selectedOutcome === 'wide' ? 0 : 0}
                     max={12}
@@ -1544,6 +1555,7 @@ export function VideoCapture() {
                 <div>
                   <label className="text-gray-400 text-xs mb-2 block">Type of Dismissal</label>
                   <select
+                    data-testid="dismissal-type-select"
                     value={selectedOutType || ''}
                     onChange={(e) => setSelectedOutType(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 text-white py-3 px-3 rounded-lg focus:outline-none focus:border-red-400"

@@ -53,6 +53,103 @@ describe('matchEngine reducer', () => {
     expect(next.score.legal_balls_in_over).toBe(0);
   });
 
+  it('rotates strike on odd runs but not on even runs', () => {
+    const initial = createInitialMatchState({
+      matchId: 'TEST04',
+      rules: { ...DEFAULT_GLOBAL_RULES },
+      strikerId: 'A',
+      nonStrikerId: 'B',
+    });
+
+    const afterSingle = matchReducer(initial, {
+      type: 'DELIVER_BALL',
+      payload: {
+        outcome_label: '1',
+        runs_batter: 1,
+        runs_extras: 0,
+        extra_type: ExtraType.None,
+      },
+    });
+    expect(afterSingle.striker_id).toBe('B');
+    expect(afterSingle.non_striker_id).toBe('A');
+
+    const afterTwo = matchReducer(afterSingle, {
+      type: 'DELIVER_BALL',
+      payload: {
+        outcome_label: '2',
+        runs_batter: 2,
+        runs_extras: 0,
+        extra_type: ExtraType.None,
+      },
+    });
+    expect(afterTwo.striker_id).toBe('B');
+    expect(afterTwo.non_striker_id).toBe('A');
+  });
+
+  it('does not rotate strike on boundaries unless over ends', () => {
+    let state = createInitialMatchState({
+      matchId: 'TEST05',
+      rules: { ...DEFAULT_GLOBAL_RULES, balls_per_over: 6 },
+      strikerId: 'A',
+      nonStrikerId: 'B',
+    });
+
+    state = matchReducer(state, {
+      type: 'DELIVER_BALL',
+      payload: {
+        outcome_label: '4',
+        runs_batter: 4,
+        runs_extras: 0,
+        extra_type: ExtraType.None,
+      },
+    });
+    expect(state.striker_id).toBe('A');
+    expect(state.non_striker_id).toBe('B');
+
+    state = matchReducer(state, {
+      type: 'DELIVER_BALL',
+      payload: {
+        outcome_label: '6',
+        runs_batter: 6,
+        runs_extras: 0,
+        extra_type: ExtraType.None,
+      },
+    });
+    expect(state.striker_id).toBe('A');
+    expect(state.non_striker_id).toBe('B');
+  });
+
+  it('manual correction updates score/ends without adding history', () => {
+    const initial = createInitialMatchState({
+      matchId: 'TEST06',
+      rules: { ...DEFAULT_GLOBAL_RULES, balls_per_over: 6 },
+      strikerId: 'A',
+      nonStrikerId: 'B',
+    });
+
+    const next = matchReducer(initial, {
+      type: 'MANUAL_CORRECTION',
+      payload: {
+        runs: 42,
+        wickets: 3,
+        over_number: 8,
+        legal_balls_in_over: 4,
+        striker_id: 'B',
+        non_striker_id: 'A',
+        reason: 'umpire override',
+      },
+    });
+
+    expect(next.score.runs).toBe(42);
+    expect(next.score.wickets).toBe(3);
+    expect(next.over_number).toBe(8);
+    expect(next.score.legal_balls_in_over).toBe(4);
+    expect(next.striker_id).toBe('B');
+    expect(next.non_striker_id).toBe('A');
+    expect(next.history).toHaveLength(0);
+    expect(next.pending_sync).toBe(true);
+  });
+
   it('The Intent Parser: "wide ball" maps to ExtraEvent', () => {
     const parsed = parseIntentToDeliveryEvent('wide ball');
     expect(parsed.extra_type).toBe(ExtraType.Wide);

@@ -6,7 +6,10 @@ import type { ReactNode } from 'react';
  */
 export function MatchPageSummaryStrip({ children }: { children: ReactNode }) {
   return (
-    <div className="shrink-0 px-4 pt-3 pb-3 border-b border-gray-800 bg-black flex justify-start">
+    <div
+      data-testid="match-page-summary-strip"
+      className="shrink-0 px-4 pt-3 pb-3 border-b border-gray-800 bg-black flex justify-start"
+    >
       {children}
     </div>
   );

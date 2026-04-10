@@ -11,6 +11,8 @@ dist
 dist-ssr
 *.local
 
+.pw-browsers
+playwright-report/data
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -21,3 +23,38 @@ dist-ssr
 *.sln
 *.sw?
 .env
+# Node modules
+node_modules/
+
+# VS Code workspace files
+.vscode/
+
+# IDE-specific files
+.idea/
+
+# Build artifacts
+/dist/
+/build/
+/out/
+
+# Temporary files
+*.log
+*.tmp
+
+# Large binary files
+*.png
+*.jpg
+*.mp4
+
+# Test results and reports
+/test-results/
+/reports/
+
+# Dependencies in specific directories
+/services/local-ai/requirements.txt
+
+# Generated files
+/generated/
+
+# Cache files
+/cache/

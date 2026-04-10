@@ -13,6 +13,11 @@ import { Header, type NavHighlight } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Footer } from './components/Footer';
 import { GullyRulz } from './components/AppInfo';
+import { QAReport } from './components/QAReport';
+
+function isQaReportRouteEnabled(): boolean {
+  return Boolean(import.meta.env.DEV || import.meta.env.VITE_ENABLE_QA_REPORT === 'true');
+}
 
 function readStoredMainTab(): MainTab {
   const raw = SecureStorage.getItem(STORAGE_KEYS.APP_ACTIVE_TAB);
@@ -58,6 +63,19 @@ function AppContent() {
     }
     if (p.kind === 'gullyRulz') {
       setActiveTabState('gullyRulz');
+      return;
+    }
+    if (p.kind === 'qa') {
+      if (isQaReportRouteEnabled()) {
+        setActiveTabState('qa');
+      } else {
+        setMatchId(null);
+        setActiveTabState('record');
+        if (typeof window !== 'undefined' && window.location.hash === '#/qa') {
+          skipHashEvent.current = true;
+          window.location.replace(`${window.location.pathname}${window.location.search}#/`);
+        }
+      }
       return;
     }
     if (p.kind === 'match' && p.matchId === matchId) {
@@ -108,6 +126,19 @@ function AppContent() {
         setActiveTabState('gullyRulz');
         return;
       }
+      if (p.kind === 'qa') {
+        if (isQaReportRouteEnabled()) {
+          setActiveTabState('qa');
+        } else {
+          setMatchId(null);
+          setActiveTabState('record');
+          if (window.location.hash === '#/qa') {
+            skipHashEvent.current = true;
+            window.location.replace(`${window.location.pathname}${window.location.search}#/`);
+          }
+        }
+        return;
+      }
       if (p.kind === 'match' && matchId && p.matchId === matchId) {
         setActiveTabState(p.tab);
         return;
@@ -124,6 +155,7 @@ function AppContent() {
   const navHighlight: NavHighlight = useMemo(() => {
     if (activeTab === 'admin') return 'admin';
     if (activeTab === 'gullyRulz') return 'gullyRulz';
+    if (activeTab === 'qa') return 'none';
     if (!matchId) return 'home';
     if (activeTab === 'record') return 'home';
     return 'none';
@@ -139,6 +171,8 @@ function AppContent() {
       <div className="pt-16 flex-1 flex flex-col min-h-0">
         {activeTab === 'admin' ? (
           <AdminDashboard />
+        ) : activeTab === 'qa' && isQaReportRouteEnabled() ? (
+          <QAReport />
         ) : activeTab === 'gullyRulz' ? (
           <GullyRulz />
         ) : !matchId ? (
@@ -152,7 +186,7 @@ function AppContent() {
           </>
         )}
       </div>
-      {activeTab !== 'admin' && activeTab !== 'gullyRulz' && (
+      {activeTab !== 'admin' && activeTab !== 'gullyRulz' && activeTab !== 'qa' && (
         <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
       )}
       <Footer />

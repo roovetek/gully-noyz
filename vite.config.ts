@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { configDefaults } from 'vitest/config';
 
 function readPackageVersion(): string {
   try {
@@ -45,12 +46,26 @@ const commitSha = getCommitSha();
 const versionSuffix = commitSha || getTimestampSuffix(buildDate);
 const appVersion = `${baseVersion}+${versionSuffix}`;
 
+const e2eSupabaseUrl = 'http://127.0.0.1:54321';
+const e2eSupabaseAnonKey =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
     'import.meta.env.VITE_BUILD_DATE': JSON.stringify(buildDate),
+    ...(mode === 'e2e'
+      ? {
+          'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
+            process.env.VITE_SUPABASE_URL?.trim() || e2eSupabaseUrl
+          ),
+          'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
+            process.env.VITE_SUPABASE_ANON_KEY?.trim() || e2eSupabaseAnonKey
+          ),
+        }
+      : {}),
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
@@ -69,6 +84,7 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: './tests/setup.ts',
+    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -81,4 +97,4 @@ export default defineConfig({
       ],
     },
   },
-});
+}));

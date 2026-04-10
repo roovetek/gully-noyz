@@ -1,0 +1,51 @@
+import { expect, test } from './fixtures/test';
+
+test.describe('UI alignment regression', () => {
+  test('record controls remain visible and non-overlapping', async ({
+    landingPage,
+    createMatchFlow,
+    page,
+  }) => {
+    await landingPage.goto();
+    await createMatchFlow({
+      name: 'UI Alignment Match',
+      umpirePasscode: '1234',
+    });
+
+    const inningsBadge = page.getByText(/Innings 1/).first();
+    const startDelivery = page.getByRole('button', { name: 'Start Delivery' });
+    await expect(inningsBadge).toBeVisible();
+    await expect(startDelivery).toBeVisible();
+
+    const viewport = page.viewportSize();
+    const badgeBox = await inningsBadge.boundingBox();
+    const startBox = await startDelivery.boundingBox();
+    expect(badgeBox).toBeTruthy();
+    expect(startBox).toBeTruthy();
+    if (viewport && badgeBox && startBox) {
+      // Keep this robust across responsive layouts while still catching misplaced controls.
+      expect(startBox.y).toBeGreaterThan(0);
+      expect(startBox.y + startBox.height).toBeLessThanOrEqual(viewport.height);
+      expect(startBox.y).toBeGreaterThanOrEqual(badgeBox.y);
+    }
+  });
+
+  test('manual outcome drawer opens fully with actionable controls', async ({
+    landingPage,
+    createMatchFlow,
+    recordPage,
+    page,
+  }) => {
+    await landingPage.goto();
+    await createMatchFlow({
+      name: 'UI Drawer Alignment Match',
+      umpirePasscode: '1234',
+    });
+
+    await recordPage.openManualOutcomeDrawer();
+    await expect(page.getByTestId('manual-outcome-drawer')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save Clip' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  });
+});
+

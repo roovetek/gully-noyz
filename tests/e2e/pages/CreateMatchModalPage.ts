@@ -1,0 +1,48 @@
+import { expect, type Page } from '@playwright/test';
+import type { CreateMatchOptions } from './types';
+
+export class CreateMatchModalPage {
+  constructor(private readonly page: Page) {}
+
+  async expectVisible() {
+    await expect(this.page.getByTestId('create-match-modal')).toBeVisible();
+  }
+
+  async createMatch(options: CreateMatchOptions) {
+    await this.expectVisible();
+    await this.page.getByPlaceholder('e.g., India vs Pakistan Finals').fill(options.name);
+    await this.page.getByPlaceholder('Set a passcode for the umpire').fill(options.umpirePasscode);
+
+    if (options.customizeRules) {
+      await this.page.getByRole('button', { name: 'Toggle customize rules' }).click();
+      if (options.customizeRules.oversPerInnings !== undefined) {
+        await this.page
+          .getByTestId('rules-overs-per-innings-input')
+          .fill(String(options.customizeRules.oversPerInnings));
+      }
+      if (options.customizeRules.ballsPerOver !== undefined) {
+        await this.page
+          .getByTestId('rules-balls-per-over-input')
+          .fill(String(options.customizeRules.ballsPerOver));
+      }
+      if (options.customizeRules.maxWickets !== undefined) {
+        await this.page.getByTestId('rules-max-wickets-input').fill(String(options.customizeRules.maxWickets));
+      }
+      if (options.customizeRules.maxOversPerBowler !== undefined) {
+        await this.page
+          .getByTestId('rules-max-overs-per-bowler-input')
+          .fill(String(options.customizeRules.maxOversPerBowler));
+      }
+    }
+
+    if (options.isPrivate) {
+      await this.page.getByRole('checkbox', { name: 'Private match toggle' }).check();
+      if (options.secret) {
+        await this.page.getByPlaceholder('Enter a secret code').fill(options.secret);
+      }
+    }
+
+    await this.page.getByTestId('create-match-submit').click();
+  }
+}
+
