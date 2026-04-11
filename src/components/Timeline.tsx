@@ -7,14 +7,16 @@ export function Timeline() {
   const { matchId } = useMatch();
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-black pb-20 text-white">
       {matchId && (
         <MatchPageSummaryStrip>
           <MatchHeaderSummary variant="solid" showNameEdit />
         </MatchPageSummaryStrip>
       )}
 
-      <MatchTimeline />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <MatchTimeline />
+      </div>
     </div>
   );
 }

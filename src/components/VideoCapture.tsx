@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Circle, Square, ChevronUp, Pause, Play, SkipForward, Mic } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
+import { useMatchClips } from '../context/MatchClipsContext';
 import { executeTrackedAction, supabase } from '../lib/supabase';
-import { getTestDataFilter } from '../lib/testDataFilter';
 import { logger } from '../lib/logger';
 
 import { validateRole } from '../lib/accessControl';
-import { calculateInningsOversDisplay } from '../lib/match';
+import { deriveRecorderHudFromInningsClips } from '../lib/recorderFromClips';
 import { formatDismissalOptionLabel, getDismissalOptionOrder } from '../lib/dismissalOptions';
 import { DEFAULT_GLOBAL_RULES, getEffectiveRules } from '../lib/rulesEngine';
 import { isValidBall, parseBaseRuns, resolveBallScoring } from '../lib/ballCounter';
@@ -79,6 +79,7 @@ function getCameraUserMessage(err: unknown): string {
 
 export function VideoCapture() {
   const { matchId } = useMatch();
+  const { clips, refresh, currentInnings, ballsPerOver, totalOvers } = useMatchClips();
   const { initialize: initializeEngine, dispatch: dispatchEngine } = useMatchEngine();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,14 +106,11 @@ export function VideoCapture() {
   const [usedDeliveries, setUsedDeliveries] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [ballsPerOver, setBallsPerOver] = useState(6);
-  const [totalOvers, setTotalOvers] = useState(20);
   const [rules, setRules] = useState<MatchRules>(DEFAULT_GLOBAL_RULES);
   const [totalRuns, setTotalRuns] = useState(0);
   const [totalWickets, setTotalWickets] = useState(0);
   const [currentOvers, setCurrentOvers] = useState('0');
   const [cameraInitialized, setCameraInitialized] = useState(false);
-  const [currentInnings, setCurrentInnings] = useState(1);
   const [inningsComplete, setInningsComplete] = useState(false);
   const [trimStartMs, setTrimStartMs] = useState<number | null>(null);
   const [trimEndMs, setTrimEndMs] = useState<number | null>(null);
@@ -166,113 +164,13 @@ export function VideoCapture() {
     return all.has(v) ? (v as WicketType) : WicketType.Unknown;
   };
 
-  const loadMatchAndClips = useCallback(async () => {
-    if (!matchId) return;
-
-    const { data: matchData } = await supabase
-      .from('matches')
-      .select('balls_per_over, total_overs, current_innings')
-      .eq('match_id', matchId)
-      .maybeSingle();
-
-    const bpo = matchData?.balls_per_over ?? 6;
-    const to = matchData?.total_overs ?? 20;
-    const inningsForQuery = matchData?.current_innings ?? currentInnings;
-    const effectiveRules = (await getEffectiveRules(matchId)) ?? DEFAULT_GLOBAL_RULES;
-
-    if (matchData) {
-      setBallsPerOver(bpo);
-      setTotalOvers(to);
-      setCurrentInnings(matchData.current_innings);
-    }
-    setRules(effectiveRules);
-
-    const testDataFilter = getTestDataFilter();
-    let clipsQuery = supabase
-      .from('clips')
-      .select('outcome, dismissal_type, over_number, ball_number, delivery_index, innings_number, extra_runs, is_valid_ball')
-      .eq('match_id', matchId)
-      .eq('innings_number', inningsForQuery);
-
-    if (testDataFilter !== undefined) {
-      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
-    }
-
-    const { data: clips } = await clipsQuery
-      .order('over_number', { ascending: false })
-      .order('delivery_index', { ascending: false })
-      .order('ball_number', { ascending: false });
-
-    let activeOverNumber = 1;
-    if (clips && clips.length > 0) {
-      const runs = clips.reduce((total, clip) => {
-        const runValue = parseBaseRuns(clip.outcome);
-        return total + runValue + (clip.extra_runs ?? 0);
-      }, 0);
-
-      const wickets = clips.filter(clip => clip.dismissal_type !== null || clip.outcome === 'wicket').length;
-
-      setTotalRuns(runs);
-      setTotalWickets(wickets);
-      setCurrentOvers(calculateInningsOversDisplay(clips, bpo));
-
-      const maxOver = Math.max(...clips.map((clip) => clip.over_number));
-      const currentOverClips = clips.filter((clip) => clip.over_number === maxOver);
-      const validBallsInOver = currentOverClips.filter((clip) => clip.is_valid_ball !== false).length;
-      const latestDelivery = Math.max(
-        ...currentOverClips.map((clip) => clip.delivery_index ?? clip.ball_number)
-      );
-
-      if (maxOver >= to && validBallsInOver >= bpo) {
-        activeOverNumber = maxOver;
-        setInningsComplete(true);
-        setOverNumber(maxOver);
-        setBallNumber(validBallsInOver);
-        setDeliveryNumber(latestDelivery + 1);
-      } else if (validBallsInOver >= bpo) {
-        activeOverNumber = maxOver + 1;
-        setOverNumber(maxOver + 1);
-        setBallNumber(1);
-        setDeliveryNumber(1);
-        setInningsComplete(false);
-      } else {
-        activeOverNumber = maxOver;
-        setOverNumber(maxOver);
-        setBallNumber(validBallsInOver + 1);
-        setDeliveryNumber(latestDelivery + 1);
-        setInningsComplete(false);
-      }
-    } else {
-      setOverNumber(1);
-      setBallNumber(1);
-      setDeliveryNumber(1);
-      setTotalRuns(0);
-      setTotalWickets(0);
-      setCurrentOvers('0');
-      setInningsComplete(false);
-    }
-
-    let usedQuery = supabase
-      .from('clips')
-      .select('delivery_index')
-      .eq('match_id', matchId)
-      .eq('innings_number', inningsForQuery)
-      .eq('over_number', activeOverNumber);
-
-    if (testDataFilter !== undefined) {
-      usedQuery = usedQuery.eq('is_test_data', testDataFilter);
-    }
-
-    const { data: usedData } = await usedQuery;
-
-    if (usedData) {
-      setUsedDeliveries(new Set(usedData.map((clip) => clip.delivery_index)));
-    }
-  }, [matchId, currentInnings]);
-
   useEffect(() => {
-    void loadMatchAndClips();
-  }, [loadMatchAndClips]);
+    if (!matchId) return;
+    void (async () => {
+      const effectiveRules = (await getEffectiveRules(matchId)) ?? DEFAULT_GLOBAL_RULES;
+      setRules(effectiveRules);
+    })();
+  }, [matchId]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -281,22 +179,17 @@ export function VideoCapture() {
 
   useEffect(() => {
     if (!matchId) return;
-
-    const channel = supabase
-      .channel(`videocapture_clips_${matchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'clips', filter: `match_id=eq.${matchId}` },
-        () => {
-          void loadMatchAndClips();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [matchId, loadMatchAndClips]);
+    const inningsClips = clips.filter((c) => c.innings_number === currentInnings);
+    const hud = deriveRecorderHudFromInningsClips(inningsClips, ballsPerOver, totalOvers);
+    setTotalRuns(hud.totalRuns);
+    setTotalWickets(hud.totalWickets);
+    setCurrentOvers(hud.currentOvers);
+    setOverNumber(hud.overNumber);
+    setBallNumber(hud.ballNumber);
+    setDeliveryNumber(hud.deliveryNumber);
+    setInningsComplete(hud.inningsComplete);
+    setUsedDeliveries(hud.usedDeliveries);
+  }, [matchId, clips, currentInnings, ballsPerOver, totalOvers]);
 
   useEffect(() => {
     if (!voiceToast) return;
@@ -875,17 +768,14 @@ export function VideoCapture() {
         setNeedsFallbackTrace(false);
       }
 
-      const nextDelivery = confirmDeliveryNumber + 1;
       const nextBall = validBall ? confirmBallNumber + 1 : confirmBallNumber;
       if (validBall && nextBall > ballsPerOver) {
-        // Over is complete — show confirm/edit modal instead of auto-advancing
         const nextOver = overNumber + 1;
         const advanceInnings = nextOver > totalOvers && currentInnings === 1;
         setOverCompleteData({ completedOver: overNumber, nextOver, advanceInnings });
-      } else {
-        setBallNumber(nextBall);
-        setDeliveryNumber(nextDelivery);
       }
+
+      await refresh();
 
       setShowDrawer(false);
       setSelectedOutcome(null);
@@ -914,7 +804,7 @@ export function VideoCapture() {
 
   const handleOverConfirm = async () => {
     if (!overCompleteData || !matchId) return;
-    const { nextOver, advanceInnings } = overCompleteData;
+    const { advanceInnings } = overCompleteData;
     setOverCompleteData(null);
     setUmpireAuthenticated(false);
     if (advanceInnings) {
@@ -931,16 +821,8 @@ export function VideoCapture() {
             .select('match_id, current_innings')
             .single(),
       });
-      setCurrentInnings(2);
-      setOverNumber(1);
-      setBallNumber(1);
-      setDeliveryNumber(1);
-      setInningsComplete(false);
-    } else {
-      setOverNumber(nextOver);
-      setBallNumber(1);
-      setDeliveryNumber(1);
     }
+    await refresh();
   };
 
   const handleUmpireAuth = async () => {
@@ -1038,6 +920,7 @@ export function VideoCapture() {
     setEditableOverBalls([]);
     setEditBallOutcome({});
     setEditBallDismissalType({});
+    await refresh();
   };
 
   const handleCancel = () => {
@@ -1055,13 +938,15 @@ export function VideoCapture() {
   };
 
   return (
-    <div className="absolute inset-0 min-h-0 overflow-hidden bg-black">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        className="absolute inset-0 h-full w-full object-cover"
-      />
+    <div className="absolute inset-0 min-h-0 bg-black">
+      <div className="absolute inset-0 overflow-hidden">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </div>
 
       <canvas ref={canvasRef} className="hidden" />
 
@@ -1099,67 +984,76 @@ export function VideoCapture() {
         )}
 
         {voiceToast && (
-          <div className="bg-purple-500/20 border border-purple-400 rounded-lg p-3">
-            <p className="text-purple-200 text-sm font-medium">{voiceToast}</p>
+          <div
+            role="status"
+            aria-live="polite"
+            className="bg-black/70 backdrop-blur rounded-lg border border-purple-400 p-3 drop-shadow-md"
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Voice</p>
+            <p className="mt-0.5 text-sm font-semibold text-white">{voiceToast}</p>
           </div>
         )}
 
-        <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 mb-2 text-center border-2 border-orange-400">
-          <span className="text-orange-400 text-lg font-bold">Innings {currentInnings}</span>
-          <span className="text-gray-400 text-sm ml-2">of 2</span>
-        </div>
-
-        {inningsComplete && currentInnings === 1 && (
-          <div className="bg-yellow-400/20 border border-yellow-400 rounded-lg p-3 mb-2 text-center">
-            <p className="text-yellow-400 font-semibold">Innings 1 Complete! Start Innings 2</p>
-          </div>
-        )}
-
-        {inningsComplete && currentInnings === 2 && (
-          <div className="bg-green-400/20 border border-green-400 rounded-lg p-3 mb-2 text-center">
-            <p className="text-green-400 font-semibold">Match Complete!</p>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center gap-2 mb-2">
-          <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-green-400">
-            <span className="text-sm text-gray-300">Over {overNumber} - Ball </span>
-            <span className="text-lg font-bold text-green-400">{ballNumber}</span>
-          </div>
-
-          {isRecording && (
-            <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
-              <span className="text-sm font-semibold">
-                {isPaused ? 'Paused ' : ''}{recordingTime}s / 15s
-              </span>
+        {!showDrawer && (
+          <>
+            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 mb-2 text-center border-2 border-orange-400">
+              <span className="text-orange-400 text-lg font-bold">Innings {currentInnings}</span>
+              <span className="text-gray-400 text-sm ml-2">of 2</span>
             </div>
-          )}
-        </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-2">
-          <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-green-400">
-            <div className="text-gray-400 text-xs">Runs</div>
-            <div className="text-green-400 text-lg font-bold">{totalRuns}</div>
-          </div>
-          <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-blue-400">
-            <div className="text-gray-400 text-xs">Overs</div>
-            <div className="text-blue-400 text-lg font-bold">{currentOvers}</div>
-          </div>
-          <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-red-400">
-            <div className="text-gray-400 text-xs">Wickets</div>
-            <div className="text-red-400 text-lg font-bold">{totalWickets}</div>
-          </div>
-        </div>
+            {inningsComplete && currentInnings === 1 && (
+              <div className="bg-yellow-400/20 border border-yellow-400 rounded-lg p-3 mb-2 text-center">
+                <p className="text-yellow-400 font-semibold">Innings 1 Complete! Start Innings 2</p>
+              </div>
+            )}
 
-        <div className="bg-black/70 backdrop-blur rounded-lg px-3 py-2 border border-purple-400">
-          <div className="text-xs text-gray-400">
-            Trim start: <span className="text-white">{formatMs(trimStartMs)}s</span>
-            <span className="mx-2 text-gray-500">|</span>
-            Trim end: <span className="text-white">{formatMs(trimEndMs)}s</span>
-            <span className="mx-2 text-gray-500">|</span>
-            Hit: <span className="text-white">{formatMs(hitTimestampMs)}s</span>
-          </div>
-        </div>
+            {inningsComplete && currentInnings === 2 && (
+              <div className="bg-green-400/20 border border-green-400 rounded-lg p-3 mb-2 text-center">
+                <p className="text-green-400 font-semibold">Match Complete!</p>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center gap-2 mb-2">
+              <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-green-400">
+                <span className="text-sm text-gray-300">Over {overNumber} - Ball </span>
+                <span className="text-lg font-bold text-green-400">{ballNumber}</span>
+              </div>
+
+              {isRecording && (
+                <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
+                  <span className="text-sm font-semibold">
+                    {isPaused ? 'Paused ' : ''}{recordingTime}s / 15s
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-green-400">
+                <div className="text-gray-400 text-xs">Runs</div>
+                <div className="text-green-400 text-lg font-bold">{totalRuns}</div>
+              </div>
+              <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-blue-400">
+                <div className="text-gray-400 text-xs">Overs</div>
+                <div className="text-blue-400 text-lg font-bold">{currentOvers}</div>
+              </div>
+              <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-red-400">
+                <div className="text-gray-400 text-xs">Wickets</div>
+                <div className="text-red-400 text-lg font-bold">{totalWickets}</div>
+              </div>
+            </div>
+
+            <div className="bg-black/70 backdrop-blur rounded-lg px-3 py-2 border border-purple-400">
+              <div className="text-xs text-gray-400">
+                Trim start: <span className="text-white">{formatMs(trimStartMs)}s</span>
+                <span className="mx-2 text-gray-500">|</span>
+                Trim end: <span className="text-white">{formatMs(trimEndMs)}s</span>
+                <span className="mx-2 text-gray-500">|</span>
+                Hit: <span className="text-white">{formatMs(hitTimestampMs)}s</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-2 px-4 pb-20 pt-1">
@@ -1272,7 +1166,7 @@ export function VideoCapture() {
       </div>
 
       {overCompleteData && !showUmpireAuth && !umpireAuthenticated && (
-        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-yellow-400 rounded-t-2xl p-6 pb-24 z-20">
+        <div className="fixed inset-x-0 bottom-0 z-[100] rounded-t-2xl border-t-2 border-yellow-400 bg-gray-900 px-6 pb-24 pt-[max(1.5rem,env(safe-area-inset-top))]">
           <div className="flex justify-center mb-4">
             <ChevronUp size={32} className="text-gray-600" />
           </div>
@@ -1303,7 +1197,7 @@ export function VideoCapture() {
       )}
 
       {showUmpireAuth && (
-        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-yellow-400 rounded-t-2xl p-6 pb-24 z-20">
+        <div className="fixed inset-x-0 bottom-0 z-[100] rounded-t-2xl border-t-2 border-yellow-400 bg-gray-900 px-6 pb-24 pt-[max(1.5rem,env(safe-area-inset-top))]">
           <div className="flex justify-center mb-4">
             <ChevronUp size={32} className="text-gray-600" />
           </div>
@@ -1344,7 +1238,7 @@ export function VideoCapture() {
       )}
 
       {umpireAuthenticated && editableOverBalls.length > 0 && (
-        <div className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-yellow-400 rounded-t-2xl p-6 pb-24 z-20 overflow-y-auto max-h-[80vh]">
+        <div className="fixed inset-x-0 bottom-0 z-[100] max-h-[80vh] overflow-y-auto rounded-t-2xl border-t-2 border-yellow-400 bg-gray-900 px-6 pb-24 pt-[max(1.5rem,env(safe-area-inset-top))]">
           <div className="flex justify-center mb-4">
             <ChevronUp size={32} className="text-gray-600" />
           </div>
@@ -1422,184 +1316,183 @@ export function VideoCapture() {
       {showDrawer && (
         <div
           data-testid="manual-outcome-drawer"
-          className="absolute inset-x-0 bottom-0 bg-gray-900 border-t-2 border-green-400 rounded-t-2xl p-6 pb-24 z-20 animate-slide-up"
+          className="fixed inset-x-0 bottom-0 z-[100] flex max-h-[calc(100dvh-13.5rem)] animate-slide-up flex-col overflow-hidden rounded-t-2xl border-t-2 border-green-400 bg-gray-900 pb-24 pt-3"
         >
-          <div className="flex justify-center mb-4">
-            <ChevronUp size={32} className="text-gray-600" />
+          <div className="shrink-0 px-6">
+            <div className="mb-3 flex justify-center">
+              <ChevronUp size={32} className="text-gray-600" />
+            </div>
+
+            <div className="mb-3 rounded-lg border border-green-400 bg-gray-800 px-3 py-2.5 text-center sm:p-4">
+              <div className="mb-0.5 text-xs text-gray-400 sm:text-sm">Recording - Innings {currentInnings}</div>
+              <div
+                data-testid="record-over-ball-indicator"
+                className="text-xl font-bold text-white sm:text-2xl"
+              >
+                Over {overNumber} - Ball {confirmBallNumber}
+              </div>
+            </div>
+
+            <h3 className="mb-2 text-center text-lg font-bold text-white sm:text-xl">
+              Confirm Recording
+            </h3>
+
+            {ballNumber === 1 && overNumber > 1 && (
+              <div className="mb-3 rounded-lg border border-yellow-400 bg-yellow-400/20 p-3 text-center">
+                <p className="font-semibold text-yellow-400">
+                  Over {overNumber - 1} Complete! Starting Over {overNumber}
+                </p>
+              </div>
+            )}
           </div>
 
-          <h3 className="text-white text-xl font-bold mb-4 text-center">
-            Confirm Recording
-          </h3>
-
-          {ballNumber === 1 && overNumber > 1 && (
-            <div className="bg-yellow-400/20 border border-yellow-400 rounded-lg p-3 mb-4 text-center">
-              <p className="text-yellow-400 font-semibold">
-                Over {overNumber - 1} Complete! Starting Over {overNumber}
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-4 mb-6">
-            <div>
-              <div className="bg-gray-800 border border-green-400 rounded-lg p-4 text-center">
-                <div className="text-gray-400 text-sm mb-1">Recording - Innings {currentInnings}</div>
-                <div
-                  data-testid="record-over-ball-indicator"
-                  className="text-white text-3xl font-bold"
-                >
-                  Over {overNumber} - Ball {confirmBallNumber}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="bg-gray-800/80 border border-cyan-500/70 rounded-lg p-3 mb-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div data-testid="ai-suggestion-heading" className="text-cyan-300 text-xs font-semibold">
-                      AI Suggestion
-                    </div>
-                    <div className="text-gray-300 text-xs">
-                      {isAIScoring
-                        ? 'Analyzing audio...'
-                        : aiSuggestion
-                          ? `${aiSuggestion.outcome.toUpperCase()} (${Math.round(aiSuggestion.confidence * 100)}%)`
-                          : 'No suggestion yet'}
-                    </div>
-                    {aiSuggestion?.rationale && (
-                      <div className="text-[11px] text-gray-400 mt-1">{aiSuggestion.rationale}</div>
-                    )}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5">
+            <div className="bg-gray-800/80 mb-3 rounded-lg border border-cyan-500/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div data-testid="ai-suggestion-heading" className="text-xs font-semibold text-cyan-300">
+                    AI Suggestion
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => aiSuggestion && applyAISuggestion(aiSuggestion)}
-                    disabled={!aiSuggestion || isAIScoring}
-                    className="bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-xs px-3 py-2 rounded-lg transition-colors"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-
-              <label className="text-gray-400 text-sm mb-2 block">Outcome</label>
-              <div className="grid grid-cols-4 gap-2 mb-3">
-                {['dot', '1', '2', '3'].map((outcome) => (
-                  <button
-                    key={outcome}
-                    aria-label={`Outcome ${outcome === 'dot' ? 'Dot' : outcome}`}
-                    onClick={() => handleOutcomeSelect(outcome)}
-                    className={`py-3 rounded-lg font-bold transition-colors ${
-                      selectedOutcome === outcome
-                        ? 'bg-green-500 text-black'
-                        : 'bg-gray-800 hover:bg-gray-700 text-white'
-                    }`}
-                  >
-                    {outcome === 'dot' ? 'Dot' : outcome}
-                  </button>
-                ))}
-                {['4', '6', 'wicket', 'other', 'wide', 'noball'].map((outcome) => (
-                  <button
-                    key={outcome}
-                    aria-label={`Outcome ${outcome}`}
-                    onClick={() => handleOutcomeSelect(outcome)}
-                    className={`py-3 rounded-lg font-bold transition-colors ${
-                      selectedOutcome === outcome
-                        ? outcome === 'wicket'
-                          ? 'bg-red-500 text-white'
-                          : outcome === 'wide' || outcome === 'noball'
-                            ? 'bg-orange-500 text-black'
-                            : 'bg-yellow-400 text-black'
-                        : 'bg-gray-800 hover:bg-gray-700 text-white'
-                    }`}
-                  >
-                    {outcome === 'wicket'
-                      ? 'Wicket'
-                      : outcome === 'other'
-                        ? 'Other'
-                        : outcome === 'wide'
-                          ? 'Wide'
-                          : outcome === 'noball'
-                            ? 'No ball'
-                            : outcome}
-                  </button>
-                ))}
-              </div>
-
-              {(selectedOutcome === 'wide' || selectedOutcome === 'noball') && (
-                <div className="mb-3">
-                  <label className="text-gray-400 text-xs mb-2 block">
-                    {selectedOutcome === 'wide' ? 'Wide runs' : 'No-ball runs'}
-                  </label>
-                  <input
-                    data-testid="extra-runs-input"
-                    type="number"
-                    min={rules.wide_no_runs && selectedOutcome === 'wide' ? 0 : 0}
-                    max={12}
-                    step={1}
-                    value={selectedExtraRuns}
-                    onChange={(e) => {
-                      const n = Number.parseInt(e.target.value || '0', 10);
-                      const sanitized = Number.isFinite(n) ? Math.max(0, Math.min(12, n)) : 0;
-                      if (selectedOutcome === 'wide' && rules.wide_no_runs) {
-                        setSelectedExtraRuns(0);
-                        return;
-                      }
-                      setSelectedExtraRuns(sanitized);
-                    }}
-                    disabled={selectedOutcome === 'wide' && rules.wide_no_runs}
-                    className="w-full bg-gray-800 border border-gray-700 text-white py-2 px-3 rounded-lg focus:outline-none focus:border-orange-400 disabled:opacity-60"
-                  />
-                  {selectedOutcome === 'wide' && rules.wide_no_runs && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Match config sets wides to 0 runs.
-                    </p>
+                  <div className="text-xs text-gray-300">
+                    {isAIScoring
+                      ? 'Analyzing audio...'
+                      : aiSuggestion
+                        ? `${aiSuggestion.outcome.toUpperCase()} (${Math.round(aiSuggestion.confidence * 100)}%)`
+                        : 'No suggestion yet'}
+                  </div>
+                  {aiSuggestion?.rationale && (
+                    <div className="mt-1 text-[11px] text-gray-400">{aiSuggestion.rationale}</div>
                   )}
                 </div>
-              )}
-
-              {selectedOutcome === 'wicket' && (
-                <div>
-                  <label className="text-gray-400 text-xs mb-2 block">Type of Dismissal</label>
-                  <select
-                    data-testid="dismissal-type-select"
-                    value={selectedOutType || ''}
-                    onChange={(e) => setSelectedOutType(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 text-white py-3 px-3 rounded-lg focus:outline-none focus:border-red-400"
-                  >
-                    <option value="">Select dismissal type</option>
-                    {getDismissalOptionOrder().map((kind) => (
-                      <option key={kind} value={kind}>
-                        {formatDismissalOptionLabel(kind)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => aiSuggestion && applyAISuggestion(aiSuggestion)}
+                  disabled={!aiSuggestion || isAIScoring}
+                  className="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-bold text-black transition-colors hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </div>
             </div>
+
+            <label className="mb-2 block text-sm text-gray-400">Outcome</label>
+            <div className="mb-3 grid grid-cols-4 gap-2">
+              {['dot', '1', '2', '3'].map((outcome) => (
+                <button
+                  key={outcome}
+                  aria-label={`Outcome ${outcome === 'dot' ? 'Dot' : outcome}`}
+                  onClick={() => handleOutcomeSelect(outcome)}
+                  className={`rounded-lg py-3 font-bold transition-colors ${
+                    selectedOutcome === outcome
+                      ? 'bg-green-500 text-black'
+                      : 'bg-gray-800 text-white hover:bg-gray-700'
+                  }`}
+                >
+                  {outcome === 'dot' ? 'Dot' : outcome}
+                </button>
+              ))}
+              {['4', '6', 'wicket', 'other', 'wide', 'noball'].map((outcome) => (
+                <button
+                  key={outcome}
+                  aria-label={`Outcome ${outcome}`}
+                  onClick={() => handleOutcomeSelect(outcome)}
+                  className={`rounded-lg py-3 font-bold transition-colors ${
+                    selectedOutcome === outcome
+                      ? outcome === 'wicket'
+                        ? 'bg-red-500 text-white'
+                        : outcome === 'wide' || outcome === 'noball'
+                          ? 'bg-orange-500 text-black'
+                          : 'bg-yellow-400 text-black'
+                      : 'bg-gray-800 text-white hover:bg-gray-700'
+                  }`}
+                >
+                  {outcome === 'wicket'
+                    ? 'Wicket'
+                    : outcome === 'other'
+                      ? 'Other'
+                      : outcome === 'wide'
+                        ? 'Wide'
+                        : outcome === 'noball'
+                          ? 'No ball'
+                          : outcome}
+                </button>
+              ))}
+            </div>
+
+            {(selectedOutcome === 'wide' || selectedOutcome === 'noball') && (
+              <div className="mb-3">
+                <label className="mb-2 block text-xs text-gray-400">
+                  {selectedOutcome === 'wide' ? 'Wide runs' : 'No-ball runs'}
+                </label>
+                <select
+                  data-testid="extra-runs-input"
+                  aria-label={selectedOutcome === 'wide' ? 'Wide runs' : 'No-ball runs'}
+                  value={selectedOutcome === 'wide' && rules.wide_no_runs ? 0 : selectedExtraRuns}
+                  onChange={(e) => {
+                    if (selectedOutcome === 'wide' && rules.wide_no_runs) {
+                      setSelectedExtraRuns(0);
+                      return;
+                    }
+                    setSelectedExtraRuns(Number.parseInt(e.target.value, 10));
+                  }}
+                  disabled={selectedOutcome === 'wide' && rules.wide_no_runs}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-orange-400 focus:outline-none disabled:opacity-60"
+                >
+                  {Array.from({ length: 13 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+                {selectedOutcome === 'wide' && rules.wide_no_runs && (
+                  <p className="mt-1 text-xs text-gray-500">Match config sets wides to 0 runs.</p>
+                )}
+              </div>
+            )}
+
+            {selectedOutcome === 'wicket' && (
+              <div className="mb-4">
+                <label className="mb-2 block text-xs text-gray-400">Type of Dismissal</label>
+                <select
+                  data-testid="dismissal-type-select"
+                  value={selectedOutType || ''}
+                  onChange={(e) => setSelectedOutType(e.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-3 text-white focus:border-red-400 focus:outline-none"
+                >
+                  <option value="">Select dismissal type</option>
+                  {getDismissalOptionOrder().map((kind) => (
+                    <option key={kind} value={kind}>
+                      {formatDismissalOptionLabel(kind)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {error && (
+              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 p-3">
+                <p className="text-sm text-red-400">{error}</p>
+              </div>
+            )}
           </div>
 
-          {error && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/50 rounded-lg p-3">
-              <p className="text-red-400 text-sm">{error}</p>
+          <div className="shrink-0 border-t border-gray-800 bg-gray-900 px-6 pt-3">
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancel}
+                disabled={isUploading}
+                className="flex-1 rounded-lg bg-gray-700 py-4 font-bold text-white transition-colors hover:bg-gray-600 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={uploadClip}
+                disabled={!selectedOutcome || isUploading}
+                className="flex-1 rounded-lg bg-green-500 py-4 font-bold text-black transition-colors hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isUploading ? 'Uploading...' : 'Save Clip'}
+              </button>
             </div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleCancel}
-              disabled={isUploading}
-              className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-lg transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={uploadClip}
-              disabled={!selectedOutcome || isUploading}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-black font-bold py-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isUploading ? 'Uploading...' : 'Save Clip'}
-            </button>
           </div>
         </div>
       )}

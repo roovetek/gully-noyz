@@ -7,6 +7,10 @@ vi.mock('../../src/context/MatchContext', () => ({
   useMatch: () => ({ matchId: 'TEST01' }),
 }));
 
+vi.mock('../../src/context/MatchClipsContext', () => ({
+  useMatchClips: () => hoisted.stableMatchClips,
+}));
+
 vi.mock('../../src/lib/accessControl', () => ({
   validateRole: vi.fn(async () => true),
 }));
@@ -35,6 +39,18 @@ vi.mock('../../src/lib/rulesEngine', () => ({
 }));
 
 const hoisted = vi.hoisted(() => {
+  const stableClips: never[] = [];
+  const stableMatchClips = {
+    matchId: 'TEST01',
+    clips: stableClips,
+    inn1: { runs: 0, wickets: 0, overs: '0' },
+    inn2: { runs: 0, wickets: 0, overs: '0' },
+    loading: false,
+    currentInnings: 1,
+    ballsPerOver: 6,
+    totalOvers: 20,
+    refresh: vi.fn(async () => {}),
+  };
   const supabase = {
     from: vi.fn(),
     channel: vi.fn(() => ({
@@ -95,7 +111,7 @@ const hoisted = vi.hoisted(() => {
       select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })) })),
     };
   });
-  return { supabase };
+  return { supabase, stableMatchClips };
 });
 
 vi.mock('../../src/lib/supabase', () => {

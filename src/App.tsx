@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { MatchProvider, useMatch } from './context/MatchContext';
+import { MatchClipsProvider } from './context/MatchClipsContext';
 import { SecureStorage } from './lib/security';
 import { STORAGE_KEYS } from './lib/constants';
 import { hashFromAppState, parseAppHash, type AppTab, type MainTab } from './lib/appUrl';
@@ -201,7 +202,9 @@ function AppContent() {
 function App() {
   return (
     <MatchProvider>
-      <AppContent />
+      <MatchClipsProvider>
+        <AppContent />
+      </MatchClipsProvider>
     </MatchProvider>
   );
 }

@@ -1,129 +1,25 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Play } from 'lucide-react';
-import { supabase, Clip } from '../lib/supabase';
-import { useMatch } from '../context/MatchContext';
-import { getTestDataFilter } from '../lib/testDataFilter';
+import type { Clip } from '../lib/supabase';
+import { useMatchClips } from '../context/MatchClipsContext';
 import { calculateInningsOversDisplay } from '../lib/match';
 import { formatDismissalOptionLabel } from '../lib/dismissalOptions';
 
 export function MatchTimeline() {
-  const { matchId } = useMatch();
-  const [clips, setClips] = useState<Clip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { clips, loading, ballsPerOver } = useMatchClips();
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
   const [selectedOver, setSelectedOver] = useState<number | null>(null);
   const [selectedBall, setSelectedBall] = useState<number | null>(null);
   const [availableOvers, setAvailableOvers] = useState<number[]>([]);
   const [availableBalls, setAvailableBalls] = useState<number[]>([]);
   const [selectedInnings, setSelectedInnings] = useState<number>(1);
-  const [ballsPerOver, setBallsPerOver] = useState(6);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!matchId) return;
-
-    fetchClips();
-
-    const channel = supabase
-      .channel('clips_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'clips',
-          filter: `match_id=eq.${matchId}`,
-        },
-        (payload) => {
-          console.log('Realtime update:', payload);
-
-          if (payload.eventType === 'INSERT') {
-            setClips((current) => {
-              const newClip = payload.new as Clip;
-              const updated = [...current, newClip];
-              return updated.sort((a, b) => {
-                if (b.innings_number !== a.innings_number) {
-                  return b.innings_number - a.innings_number;
-                }
-                if (b.over_number !== a.over_number) {
-                  return b.over_number - a.over_number;
-                }
-                return (b.delivery_index ?? b.ball_number) - (a.delivery_index ?? a.ball_number);
-              });
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setClips((current) =>
-              current.filter((clip) => clip.id !== payload.old.id)
-            );
-          } else if (payload.eventType === 'UPDATE') {
-            setClips((current) =>
-              current.map((clip) =>
-                clip.id === payload.new.id ? (payload.new as Clip) : clip
-              )
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [matchId]);
-
-  const fetchClips = async () => {
-    if (!matchId) return;
-
-    setLoading(true);
-
-    const { data: matchRow } = await supabase
-      .from('matches')
-      .select('balls_per_over')
-      .eq('match_id', matchId)
-      .maybeSingle();
-    if (matchRow?.balls_per_over !== null && matchRow.balls_per_over > 0) {
-      setBallsPerOver(matchRow.balls_per_over);
-    }
-
-    const testDataFilter = getTestDataFilter();
-    let clipsQuery = supabase
-      .from('clips')
-      .select('*')
-      .eq('match_id', matchId);
-
-    if (testDataFilter !== undefined) {
-      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
-    }
-
-    const { data, error } = await clipsQuery
-      .order('innings_number', { ascending: false })
-      .order('over_number', { ascending: false })
-      .order('delivery_index', { ascending: false })
-      .order('ball_number', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching clips:', error);
-    } else {
-      setClips(data || []);
-
-      const filteredData = data?.filter(clip => clip.innings_number === selectedInnings) || [];
-      const overs = [...new Set(filteredData.map(clip => clip.over_number))].sort((a, b) => b - a);
-      setAvailableOvers(overs);
-
-      if (selectedOver) {
-        const balls = filteredData
-          .filter(clip => clip.over_number === selectedOver)
-          .map(clip => clip.delivery_index ?? clip.ball_number)
-          .sort((a, b) => b - a);
-        setAvailableBalls(balls);
-      }
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchClips();
-  }, [selectedInnings]);
+    const filteredData = clips.filter((clip) => clip.innings_number === selectedInnings);
+    const overs = [...new Set(filteredData.map((clip) => clip.over_number))].sort((a, b) => b - a);
+    setAvailableOvers(overs);
+  }, [clips, selectedInnings]);
 
   useEffect(() => {
     if (selectedOver && clips.length > 0) {
@@ -136,6 +32,20 @@ export function MatchTimeline() {
       setAvailableBalls([]);
     }
   }, [selectedOver, clips, selectedInnings]);
+
+  const filteredClips = useMemo(() => {
+    return clips
+      .filter((clip) => clip.innings_number === selectedInnings)
+      .sort((a, b) => {
+        if (b.innings_number !== a.innings_number) {
+          return b.innings_number - a.innings_number;
+        }
+        if (b.over_number !== a.over_number) {
+          return b.over_number - a.over_number;
+        }
+        return (b.delivery_index ?? b.ball_number) - (a.delivery_index ?? a.ball_number);
+      });
+  }, [clips, selectedInnings]);
 
   const handleNavigate = () => {
     if (selectedOver !== null && selectedBall !== null) {
@@ -257,8 +167,6 @@ export function MatchTimeline() {
       </div>
     );
   }
-
-  const filteredClips = clips.filter(clip => clip.innings_number === selectedInnings);
 
   const getTotalRuns = () => {
     return filteredClips.reduce((total, clip) => {

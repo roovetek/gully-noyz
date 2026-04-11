@@ -74,7 +74,7 @@ Status values:
 | E-MATRIX-002 | Match config combinations (public/private/customized/validation) | `tests/e2e/match-config-combinations.spec.ts` | existing |
 | E-AI-001 | AI mode availability and manual bypass flow | `tests/e2e/ai-modes-and-bypass.spec.ts` | existing |
 | E-UI-001 | UI alignment and non-overlap checks for record controls and drawer | `tests/e2e/ui-alignment.spec.ts` | existing |
-| E-VIS-001 | Dark Studio visual baselines: landing, create modal, admin login; match tabs when `RUN_DB_E2E=true` | `tests/e2e/ui-visual.spec.ts` | existing |
+| E-VIS-001 | Dark Studio visual baselines: landing, create modal, admin login; Record/Timeline/Stats/Config match tabs | `tests/e2e/ui-visual.spec.ts` | existing |
 | E-QA-001 | Hidden QA gallery route shows latest command results + screenshot sequence metadata | `src/components/QAReport.tsx`, `scripts/qa-harness.mjs` | existing |
 
 ## TC-I: Integration-Gated (Supabase-Backed)

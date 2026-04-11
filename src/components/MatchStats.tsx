@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
+import { useMatchClips } from '../context/MatchClipsContext';
 import { MatchHeaderSummary } from './MatchHeaderSummary';
 import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
-import { supabase, Clip } from '../lib/supabase';
-import { getTestDataFilter } from '../lib/testDataFilter';
+import type { Clip } from '../lib/supabase';
 import { calculateMatchStats } from '../lib/match';
 import { formatDismissalOptionLabel } from '../lib/dismissalOptions';
 import { HighlightsPlayer } from './HighlightsPlayer';
@@ -29,102 +29,48 @@ const formatDismissalLabel = (dismissalType: string) => formatDismissalOptionLab
 const isWicketBall = (clip: Pick<Clip, 'outcome' | 'dismissal_type'>) =>
   clip.outcome === 'wicket' || clip.dismissal_type !== null;
 
+function buildInningsSummary(inningsNumber: number, inningClips: Clip[], ballsPerOver: number): InningsSummary {
+  const stats = calculateMatchStats(inningClips, ballsPerOver);
+  return {
+    inningsNumber,
+    totalRuns: stats.totalRuns,
+    totalWickets: stats.totalWickets,
+    totalOvers: stats.currentOvers,
+    clips: inningClips,
+  };
+}
+
 export function MatchStats() {
   const { matchId } = useMatch();
-  const [innings1Summary, setInnings1Summary] = useState<InningsSummary | null>(null);
-  const [innings2Summary, setInnings2Summary] = useState<InningsSummary | null>(null);
+  const { clips, loading, ballsPerOver, totalOvers, currentInnings } = useMatchClips();
   const [expandedInnings, setExpandedInnings] = useState<number | null>(null);
   const [expandedOvers, setExpandedOvers] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [matchConfig, setMatchConfig] = useState({ ballsPerOver: 6, totalOvers: 20, currentInnings: 1 });
   const [generatingInnings, setGeneratingInnings] = useState<number | null>(null);
   const [highlightsError, setHighlightsError] = useState<string | null>(null);
   const [highlightsUrl, setHighlightsUrl] = useState<string | null>(null);
   const [highlightsTitle, setHighlightsTitle] = useState('Highlights Reel');
   const [highlightsOpen, setHighlightsOpen] = useState(false);
 
-  const fetchMatchData = useCallback(async () => {
-    if (!matchId) return;
-    setLoading(true);
+  const matchConfig = useMemo(
+    () => ({
+      ballsPerOver,
+      totalOvers,
+      currentInnings,
+    }),
+    [ballsPerOver, totalOvers, currentInnings]
+  );
 
-    const { data: matchData } = await supabase
-      .from('matches')
-      .select('balls_per_over, total_overs, current_innings')
-      .eq('match_id', matchId)
-      .maybeSingle();
+  const innings1Summary = useMemo(() => {
+    const c = clips.filter((x) => x.innings_number === 1);
+    if (c.length === 0) return null;
+    return buildInningsSummary(1, c, ballsPerOver);
+  }, [clips, ballsPerOver]);
 
-    if (matchData) {
-      setMatchConfig({
-        ballsPerOver: matchData.balls_per_over,
-        totalOvers: matchData.total_overs,
-        currentInnings: matchData.current_innings ?? 1,
-      });
-    }
-
-    const testDataFilter = getTestDataFilter();
-    let clipsQuery = supabase
-      .from('clips')
-      .select('*')
-      .eq('match_id', matchId);
-
-    if (testDataFilter !== undefined) {
-      clipsQuery = clipsQuery.eq('is_test_data', testDataFilter);
-    }
-
-    const { data: clips } = await clipsQuery
-      .order('innings_number', { ascending: true })
-      .order('over_number', { ascending: true })
-      .order('delivery_index', { ascending: true })
-      .order('ball_number', { ascending: true });
-
-    if (clips) {
-      const innings1Clips = clips.filter(c => c.innings_number === 1);
-      const innings2Clips = clips.filter(c => c.innings_number === 2);
-
-      if (innings1Clips.length > 0) {
-        setInnings1Summary(calculateInningsSummary(1, innings1Clips, matchData?.balls_per_over || 6));
-      }
-
-      if (innings2Clips.length > 0) {
-        setInnings2Summary(calculateInningsSummary(2, innings2Clips, matchData?.balls_per_over || 6));
-      }
-    }
-
-    setLoading(false);
-  }, [matchId]);
-
-  useEffect(() => {
-    if (!matchId) return;
-
-    fetchMatchData();
-
-    const channel = supabase
-      .channel(`match_stats_clips_${matchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'clips', filter: `match_id=eq.${matchId}` },
-        () => {
-          fetchMatchData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [matchId, fetchMatchData]);
-
-  const calculateInningsSummary = (inningsNumber: number, clips: Clip[], ballsPerOver: number): InningsSummary => {
-    const stats = calculateMatchStats(clips, ballsPerOver);
-
-    return {
-      inningsNumber,
-      totalRuns: stats.totalRuns,
-      totalWickets: stats.totalWickets,
-      totalOvers: stats.currentOvers,
-      clips,
-    };
-  };
+  const innings2Summary = useMemo(() => {
+    const c = clips.filter((x) => x.innings_number === 2);
+    if (c.length === 0) return null;
+    return buildInningsSummary(2, c, ballsPerOver);
+  }, [clips, ballsPerOver]);
 
   const getOversData = (clips: Clip[]): OverData[] => {
     const oversMap = new Map<number, Clip[]>();
@@ -245,13 +191,13 @@ export function MatchStats() {
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] bg-black text-white flex flex-col">
+      <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-black text-white">
         <MatchPageSummaryStrip>
           <MatchHeaderSummary variant="solid" showNameEdit />
         </MatchPageSummaryStrip>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <div className="text-center">
-            <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-green-400 border-t-transparent"></div>
             <p className="text-gray-400">Loading match stats...</p>
           </div>
         </div>
@@ -262,12 +208,13 @@ export function MatchStats() {
   const summaries = [innings2Summary, innings1Summary].filter(Boolean) as InningsSummary[];
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20 flex flex-col">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-black pb-20 text-white">
       <MatchPageSummaryStrip>
         <MatchHeaderSummary variant="solid" showNameEdit />
       </MatchPageSummaryStrip>
 
-      <div className="px-4 pt-4 pb-2 bg-gray-900 border-b border-gray-800">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="border-b border-gray-800 bg-gray-900 px-4 pb-2 pt-4">
         <h1
           data-testid="match-stats-heading"
           className="text-2xl font-bold text-center text-green-400"
@@ -396,6 +343,7 @@ export function MatchStats() {
             </div>
           </div>
         )}
+      </div>
       </div>
 
       <HighlightsPlayer

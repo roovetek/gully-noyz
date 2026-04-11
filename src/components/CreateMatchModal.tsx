@@ -186,7 +186,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Overs per innings</label>
+                  <label className="block text-xs text-gray-400 mb-1">Overs per innings (1–50)</label>
                   <input
                     data-testid="rules-overs-per-innings-input"
                     type="number"
@@ -198,7 +198,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Balls per over</label>
+                  <label className="block text-xs text-gray-400 mb-1">Balls per over (2–8)</label>
                   <input
                     data-testid="rules-balls-per-over-input"
                     type="number"
@@ -210,7 +210,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Max wickets</label>
+                  <label className="block text-xs text-gray-400 mb-1">Max wickets (1–11)</label>
                   <input
                     data-testid="rules-max-wickets-input"
                     type="number"
@@ -222,7 +222,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Max overs per bowler</label>
+                  <label className="block text-xs text-gray-400 mb-1">Max overs per bowler (1–10)</label>
                   <input
                     data-testid="rules-max-overs-per-bowler-input"
                     type="number"

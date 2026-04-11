@@ -28,7 +28,7 @@ export class RecordPage {
   }
 
   async setExtraRuns(extraRuns: number) {
-    await this.page.getByTestId('extra-runs-input').fill(String(extraRuns));
+    await this.page.getByTestId('extra-runs-input').selectOption(String(extraRuns));
   }
 
   async setDismissalType(value: string) {

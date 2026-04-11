@@ -22,7 +22,7 @@ const shellClass: Record<Variant, string> = {
 
 export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: MatchHeaderSummaryProps) {
   const { matchId, matchName, setMatchName } = useMatch();
-  const { inn1, inn2, loading } = useMatchInningsLines(matchId);
+  const { inn1, inn2, loading, currentInnings } = useMatchInningsLines(matchId);
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(matchName);
   const [matchCreatedAt, setMatchCreatedAt] = useState<string | null>(null);
@@ -159,32 +159,45 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
       >
         <div
           data-testid="match-header-innings-1-label"
-          className="text-orange-400 font-semibold uppercase tracking-wide"
+          className={`uppercase tracking-wide text-orange-400 ${
+            currentInnings === 1 ? 'font-bold' : 'font-semibold text-orange-400/70'
+          }`}
         >
           Innings 1
         </div>
-        <div className="text-orange-400 font-semibold uppercase tracking-wide">Innings 2</div>
-        <div className="text-white tabular-nums">
+        <div
+          data-testid="match-header-innings-2-label"
+          className={`uppercase tracking-wide text-orange-400 ${
+            currentInnings === 2 ? 'font-bold' : 'font-semibold text-orange-400/70'
+          }`}
+        >
+          Innings 2
+        </div>
+        <div
+          className={`text-white tabular-nums ${currentInnings === 1 ? 'font-semibold' : 'font-normal'}`}
+        >
           {loading ? (
             <span className="text-gray-500">…</span>
           ) : (
             <>
-              <span className="font-bold">
+              <span className={currentInnings === 1 ? 'font-bold' : 'font-semibold'}>
                 {inn1.runs}/{inn1.wickets}
               </span>
-              <span className="text-gray-400"> · {inn1.overs} ov</span>
+              <span className="text-gray-400"> · {inn1.overs} overs</span>
             </>
           )}
         </div>
-        <div className="text-white tabular-nums">
+        <div
+          className={`text-white tabular-nums ${currentInnings === 2 ? 'font-semibold' : 'font-normal'}`}
+        >
           {loading ? (
             <span className="text-gray-500">…</span>
           ) : (
             <>
-              <span className="font-bold">
+              <span className={currentInnings === 2 ? 'font-bold' : 'font-semibold'}>
                 {inn2.runs}/{inn2.wickets}
               </span>
-              <span className="text-gray-400"> · {inn2.overs} ov</span>
+              <span className="text-gray-400"> · {inn2.overs} overs</span>
             </>
           )}
         </div>

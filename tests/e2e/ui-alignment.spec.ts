@@ -43,9 +43,19 @@ test.describe('UI alignment regression', () => {
     });
 
     await recordPage.openManualOutcomeDrawer();
-    await expect(page.getByTestId('manual-outcome-drawer')).toBeVisible();
+    const drawer = page.getByTestId('manual-outcome-drawer');
+    const summaryStrip = page.getByTestId('match-page-summary-strip');
+    await expect(drawer).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save Clip' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+
+    const stripBox = await summaryStrip.boundingBox();
+    const drawerBox = await drawer.boundingBox();
+    expect(stripBox).toBeTruthy();
+    expect(drawerBox).toBeTruthy();
+    if (stripBox && drawerBox) {
+      expect(drawerBox.y).toBeGreaterThanOrEqual(stripBox.y + stripBox.height - 2);
+    }
   });
 });
 

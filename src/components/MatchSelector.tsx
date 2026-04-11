@@ -156,14 +156,16 @@ export function MatchSelector({ onOpenGullyRulz }: MatchSelectorProps) {
     <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-5xl font-bold text-yellow-400 mb-2">GullyStream</h1>
-          <p className="text-green-400 text-lg">Start streaming your match</p>
+          <h1 className="mb-2 text-5xl font-bold tracking-tight text-[#d97757] drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">
+            GullyStream
+          </h1>
+          <p className="text-lg text-stone-100">Start streaming your match</p>
         </div>
 
         <div className="space-y-6">
           <button
             onClick={handleCreateMatch}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors"
+            className="w-full bg-yellow-400/20 hover:bg-yellow-400/30 text-yellow-400 font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors border border-yellow-400"
           >
             <Plus size={24} />
             <span className="text-lg">Create Match</span>
@@ -196,7 +198,7 @@ export function MatchSelector({ onOpenGullyRulz }: MatchSelectorProps) {
 
             <button
               onClick={handleJoinMatch}
-              className="w-full bg-green-500 hover:bg-green-600 text-black font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors"
+              className="w-full bg-green-500/20 hover:bg-green-500/30 text-green-400 font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors border border-green-400"
             >
               <LogIn size={24} />
               <span className="text-lg">Join Match</span>

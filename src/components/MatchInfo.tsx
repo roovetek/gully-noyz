@@ -21,8 +21,8 @@ export function MatchInfo() {
   }, [matchId]);
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
-      <div className="p-4 bg-gray-900 border-b border-gray-800">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-black pb-20 text-white">
+      <div className="border-b border-gray-800 bg-gray-900 p-4">
         <div className="flex items-center gap-3">
           <Info size={24} className="text-green-400" />
           <div>
@@ -40,7 +40,7 @@ export function MatchInfo() {
         </MatchPageSummaryStrip>
       )}
 
-      <div className="p-4 space-y-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {rules ? (
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
