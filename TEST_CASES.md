@@ -67,14 +67,14 @@ Status values:
 | E-SMOKE-001 | Landing page renders Create Match and Join Match actions | `tests/e2e/smoke.spec.ts` | existing |
 | E-RECORD-001 | Public create-match happy path reaches record HUD | `tests/e2e/record-flow.spec.ts` | existing |
 | E-PRIVATE-001 | Private match creation + join secret validation flow | `tests/e2e/private-match.spec.ts` | existing |
-| E-TABS-001 | Record/Timeline/Stats/Info tab navigation works | `tests/e2e/tab-navigation.spec.ts` | existing |
+| E-TABS-001 | Record/Timeline/Stats/Info tab navigation works | `tests/e2e/test1-runthrough.spec.ts` | existing |
 | E-ADMIN-001 | Hidden admin route remains accessible via `/#/admin` | `tests/e2e/tab-navigation.spec.ts` | existing |
-| E-BALL-001 | Basic scoring interaction in browser (select run, record control visible) | `tests/e2e/ball-recording.spec.ts` | existing |
+| E-BALL-001 | Basic scoring interaction in browser (select run, record control visible) | `tests/e2e/test1-runthrough.spec.ts` | existing |
 | E-MATRIX-001 | 3-over x 6-ball deterministic outcome matrix | `tests/e2e/three-over-six-ball.spec.ts` | existing |
 | E-MATRIX-002 | Match config combinations (public/private/customized/validation) | `tests/e2e/match-config-combinations.spec.ts` | existing |
 | E-AI-001 | AI mode availability and manual bypass flow | `tests/e2e/ai-modes-and-bypass.spec.ts` | existing |
 | E-UI-001 | UI alignment and non-overlap checks for record controls and drawer | `tests/e2e/ui-alignment.spec.ts` | existing |
-| E-VIS-001 | Dark Studio visual snapshot baselines for landing and key match states | `tests/e2e/ui-visual.spec.ts` | existing |
+| E-VIS-001 | Dark Studio visual baselines: landing, create modal, admin login; match tabs when `RUN_DB_E2E=true` | `tests/e2e/ui-visual.spec.ts` | existing |
 | E-QA-001 | Hidden QA gallery route shows latest command results + screenshot sequence metadata | `src/components/QAReport.tsx`, `scripts/qa-harness.mjs` | existing |
 
 ## TC-I: Integration-Gated (Supabase-Backed)

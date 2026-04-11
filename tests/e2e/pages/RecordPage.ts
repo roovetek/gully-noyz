@@ -67,7 +67,11 @@ export class RecordPage {
   }
 
   async expectAiStatus(text: RegExp | string) {
-    await expect(this.page.getByText(text)).toBeVisible();
+    await expect(this.page.getByTestId('ai-assist-status')).toContainText(text);
+  }
+
+  async expectAiSuggestionHeadingVisible() {
+    await expect(this.page.getByTestId('ai-suggestion-heading')).toBeVisible();
   }
 
   async confirmOverIfNeeded() {

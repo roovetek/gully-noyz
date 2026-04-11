@@ -1,5 +1,10 @@
 import { vi } from 'vitest';
 
+/**
+ * Shared Supabase client shape for Vitest UI/component tests.
+ * Prefer `vi.hoisted(() => ({ supabase: mockSupabaseClient() }))` plus `vi.mock('../path/to/supabase', …)`
+ * so tests never import the real client (which requires env at module load).
+ */
 export function mockSupabaseClient() {
   return {
     from: vi.fn(() => ({

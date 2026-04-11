@@ -18,6 +18,7 @@ test.describe('2026-04-09-Test1 runthrough', () => {
     });
 
     await recordPage.expectLoaded();
+    await appShellPage.expectMainTabsVisible();
 
     await appShellPage.switchMainTab('Timeline');
     await timelinePage.expectNoClipsMessage();

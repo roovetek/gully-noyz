@@ -1,21 +1,16 @@
 import { expect, test } from './fixtures/test';
 
 test.describe('Match configuration combinations', () => {
-  test('validates private match requires secret', async ({
-    landingPage,
-    createMatchModalPage,
-    page,
-  }) => {
+  test('validates private match requires secret', async ({ landingPage, createMatchModalPage }) => {
     await landingPage.goto();
     await landingPage.openCreateMatchModal();
     await createMatchModalPage.expectVisible();
 
-    await page.getByPlaceholder('e.g., India vs Pakistan Finals').fill('Private Validation Match');
-    await page.getByPlaceholder('Set a passcode for the umpire').fill('1234');
-    await page.getByRole('checkbox', { name: 'Private match toggle' }).check();
-    await page.getByTestId('create-match-submit').click();
+    await createMatchModalPage.fillBasics('Private Validation Match', '1234');
+    await createMatchModalPage.setPrivateMatch(true);
+    await createMatchModalPage.submitCreate();
 
-    await expect(page.getByText(/please enter a secret/i)).toBeVisible();
+    await createMatchModalPage.expectFormError(/please enter a secret/i);
   });
 
   test('creates match with customize on and verifies rules in match info', async ({

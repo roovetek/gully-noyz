@@ -17,14 +17,14 @@ test.describe('AI availability and bypass', () => {
     await recordPage.expectAiStatus(/mode updated/i);
 
     await recordPage.openManualOutcomeDrawer();
-    await expect(page.getByText('AI Suggestion')).toBeVisible();
+    await recordPage.expectAiSuggestionHeadingVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     await recordPage.setAiMode('live');
     await recordPage.expectAiStatus(/mode updated/i);
 
     await recordPage.openManualOutcomeDrawer();
-    await expect(page.getByText(/record audio to use live ai/i)).toBeVisible();
+    await recordPage.expectAiStatus(/record audio to use live ai/i);
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     // Manual bypass should always work even when live AI has no audio/service.

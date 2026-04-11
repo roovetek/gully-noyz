@@ -26,7 +26,9 @@ export function MatchInfo() {
         <div className="flex items-center gap-3">
           <Info size={24} className="text-green-400" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Match Info</h1>
+            <h1 data-testid="match-info-heading" className="text-2xl font-bold text-white">
+              Match Info
+            </h1>
             <p className="text-sm text-gray-400">Details and rules for the current match.</p>
           </div>
         </div>

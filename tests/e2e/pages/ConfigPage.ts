@@ -4,7 +4,7 @@ export class ConfigPage {
   constructor(private readonly page: Page) {}
 
   async expectLoaded() {
-    await expect(this.page.getByText('Match Info')).toBeVisible();
+    await expect(this.page.getByTestId('match-info-heading')).toBeVisible();
   }
 
   async expectRuleLine(line: string | RegExp) {

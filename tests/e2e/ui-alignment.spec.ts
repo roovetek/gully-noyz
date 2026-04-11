@@ -12,7 +12,7 @@ test.describe('UI alignment regression', () => {
       umpirePasscode: '1234',
     });
 
-    const inningsBadge = page.getByText(/Innings 1/).first();
+    const inningsBadge = page.getByTestId('match-header-innings-1-label');
     const startDelivery = page.getByRole('button', { name: 'Start Delivery' });
     await expect(inningsBadge).toBeVisible();
     await expect(startDelivery).toBeVisible();

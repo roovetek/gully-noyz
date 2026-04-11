@@ -89,7 +89,10 @@ export function QAReport() {
         <div className="max-w-3xl mx-auto bg-red-500/10 border border-red-500/40 rounded-lg p-4">
           <h2 className="text-lg font-bold text-red-300 mb-2">QA Report Unavailable</h2>
           <p className="text-red-200 text-sm">{error ?? 'Unknown error'}</p>
-          <p className="text-gray-400 text-xs mt-2">Hidden route: `/#/qa`</p>
+          <p className="text-gray-400 text-xs mt-2">
+            Hidden route: <code className="text-gray-300">/#/qa</code> (dev only unless{' '}
+            <code className="text-gray-300">VITE_ENABLE_QA_REPORT=true</code>).
+          </p>
         </div>
       </div>
     );

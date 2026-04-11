@@ -247,7 +247,9 @@ export function MatchTimeline() {
           <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
             <Play size={32} className="text-gray-600" />
           </div>
-          <h3 className="text-xl font-bold text-gray-300 mb-2">No clips yet</h3>
+          <h3 data-testid="timeline-empty-heading" className="text-xl font-bold text-gray-300 mb-2">
+            No clips yet
+          </h3>
           <p className="text-gray-500">
             Start recording from the Record tab to see clips appear here
           </p>
@@ -313,7 +315,9 @@ export function MatchTimeline() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-gray-400 text-sm">Navigate to Ball</label>
+          <label data-testid="timeline-navigate-label" className="text-gray-400 text-sm">
+            Navigate to Ball
+          </label>
           <div className="flex gap-2">
             <select
               value={selectedOver || ''}

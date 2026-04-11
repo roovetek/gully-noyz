@@ -268,7 +268,12 @@ export function MatchStats() {
       </MatchPageSummaryStrip>
 
       <div className="px-4 pt-4 pb-2 bg-gray-900 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-center text-green-400">Match Stats</h1>
+        <h1
+          data-testid="match-stats-heading"
+          className="text-2xl font-bold text-center text-green-400"
+        >
+          Match Stats
+        </h1>
       </div>
 
       <div className="p-4 flex-1">

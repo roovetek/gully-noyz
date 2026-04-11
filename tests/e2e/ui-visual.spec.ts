@@ -19,6 +19,15 @@ test.describe('Dark Studio visual baselines', () => {
     });
   });
 
+  test('admin console login visual', async ({ appShellPage, adminPage, page }) => {
+    await appShellPage.gotoAdminBackdoor();
+    await adminPage.expectLoginVisible();
+    await expect(page).toHaveScreenshot('admin-dark-studio.png', {
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
+
   test('major match pages visuals', async ({
     landingPage,
     createMatchFlow,
@@ -36,7 +45,7 @@ test.describe('Dark Studio visual baselines', () => {
 
     const dynamicMasks = [
       page.getByTestId('match-page-summary-strip'),
-      page.getByText(/Over \d+ - Ball \d+/),
+      page.getByTestId('record-over-ball-indicator'),
     ];
 
     await recordPage.expectLoaded();

@@ -31,7 +31,7 @@ test.describe('Private match journey', () => {
 
     await page.getByPlaceholder('Enter the secret code').fill('wrong-secret');
     await page.getByRole('button', { name: 'Access Match' }).click();
-    await expect(page.getByText(/incorrect secret/i)).toBeVisible();
+    await expect(page.getByTestId('secret-prompt-error')).toContainText(/incorrect secret/i);
 
     await page.getByPlaceholder('Enter the secret code').fill('secret123');
     await page.getByRole('button', { name: 'Access Match' }).click();

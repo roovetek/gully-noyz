@@ -4,11 +4,11 @@ export class TimelinePage {
   constructor(private readonly page: Page) {}
 
   async expectNoClipsMessage() {
-    await expect(this.page.getByText(/no clips yet/i)).toBeVisible();
+    await expect(this.page.getByTestId('timeline-empty-heading')).toBeVisible();
   }
 
   async expectLoaded() {
-    await expect(this.page.getByText('Navigate to Ball')).toBeVisible();
+    await expect(this.page.getByTestId('timeline-navigate-label')).toBeVisible();
   }
 }
 

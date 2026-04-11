@@ -1182,7 +1182,9 @@ export function VideoCapture() {
               <option value="mock">Mock AI</option>
             </select>
           </div>
-          <div className="text-[11px] text-gray-300 mt-1">{aiStatus}</div>
+          <div data-testid="ai-assist-status" className="text-[11px] text-gray-300 mt-1">
+            {aiStatus}
+          </div>
         </div>
       </div>
 
@@ -1442,7 +1444,10 @@ export function VideoCapture() {
             <div>
               <div className="bg-gray-800 border border-green-400 rounded-lg p-4 text-center">
                 <div className="text-gray-400 text-sm mb-1">Recording - Innings {currentInnings}</div>
-                <div className="text-white text-3xl font-bold">
+                <div
+                  data-testid="record-over-ball-indicator"
+                  className="text-white text-3xl font-bold"
+                >
                   Over {overNumber} - Ball {confirmBallNumber}
                 </div>
               </div>
@@ -1452,7 +1457,9 @@ export function VideoCapture() {
               <div className="bg-gray-800/80 border border-cyan-500/70 rounded-lg p-3 mb-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-cyan-300 text-xs font-semibold">AI Suggestion</div>
+                    <div data-testid="ai-suggestion-heading" className="text-cyan-300 text-xs font-semibold">
+                      AI Suggestion
+                    </div>
                     <div className="text-gray-300 text-xs">
                       {isAIScoring
                         ? 'Analyzing audio...'

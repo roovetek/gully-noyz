@@ -157,7 +157,12 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
         className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 border-t border-yellow-400/30 text-[11px] sm:text-xs"
         aria-busy={loading}
       >
-        <div className="text-orange-400 font-semibold uppercase tracking-wide">Innings 1</div>
+        <div
+          data-testid="match-header-innings-1-label"
+          className="text-orange-400 font-semibold uppercase tracking-wide"
+        >
+          Innings 1
+        </div>
         <div className="text-orange-400 font-semibold uppercase tracking-wide">Innings 2</div>
         <div className="text-white tabular-nums">
           {loading ? (

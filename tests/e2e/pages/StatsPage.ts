@@ -4,7 +4,7 @@ export class StatsPage {
   constructor(private readonly page: Page) {}
 
   async expectLoaded() {
-    await expect(this.page.getByText('Match Stats')).toBeVisible();
+    await expect(this.page.getByTestId('match-stats-heading')).toBeVisible();
   }
 }
 
