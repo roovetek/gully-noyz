@@ -7,7 +7,7 @@ export function Record() {
   const { matchId } = useMatch();
 
   return (
-    <div className="flex w-full flex-1 min-h-0 flex-col bg-black pb-20 text-white">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-black pb-20 text-white">
       {matchId && (
         <MatchPageSummaryStrip>
           <MatchHeaderSummary variant="solid" showNameEdit />

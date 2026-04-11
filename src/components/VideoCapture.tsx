@@ -1055,17 +1055,17 @@ export function VideoCapture() {
   };
 
   return (
-    <div className="relative h-full min-h-0 bg-black">
+    <div className="absolute inset-0 min-h-0 overflow-hidden bg-black">
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="w-full h-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover"
       />
 
       <canvas ref={canvasRef} className="hidden" />
 
-      <div className="absolute top-0 left-0 right-0 p-4 text-white z-10 space-y-2">
+      <div className="absolute top-0 left-0 right-0 z-10 space-y-1 p-2 text-white sm:space-y-2 sm:p-3">
         {cameraError && (
           <div
             role="alert"
@@ -1160,10 +1160,12 @@ export function VideoCapture() {
             Hit: <span className="text-white">{formatMs(hitTimestampMs)}s</span>
           </div>
         </div>
+      </div>
 
-        <div className="bg-black/70 backdrop-blur rounded-lg px-3 py-2 border border-cyan-400">
+      <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-2 px-4 pb-20 pt-1">
+        <div className="shrink-0 rounded-lg border border-cyan-400 bg-black/85 px-3 py-2 backdrop-blur">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-cyan-300 font-semibold">AI Assist</span>
+            <span className="text-xs font-semibold text-cyan-300">AI Assist</span>
             <select
               data-testid="ai-assist-mode-select"
               aria-label="AI assist mode"
@@ -1175,21 +1177,19 @@ export function VideoCapture() {
                 setAiSuggestion(null);
                 setAiStatus(nextMode === 'off' ? 'AI assist is off' : 'Mode updated');
               }}
-              className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1"
+              className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white"
             >
               <option value="off">Manual only</option>
               <option value="live">Local AI</option>
               <option value="mock">Mock AI</option>
             </select>
           </div>
-          <div data-testid="ai-assist-status" className="text-[11px] text-gray-300 mt-1">
+          <div data-testid="ai-assist-status" className="mt-1 text-[11px] text-gray-300">
             {aiStatus}
           </div>
         </div>
-      </div>
 
-      <div className="absolute bottom-0 left-0 right-0 pb-20 px-4 z-10">
-        <div className="grid grid-cols-4 gap-2 mb-3">
+        <div className="grid grid-cols-4 gap-2">
           <button
             onClick={() => void handleStartDelivery()}
             disabled={showDrawer || inningsComplete || !!overCompleteData || isUploading}
@@ -1229,7 +1229,7 @@ export function VideoCapture() {
           </button>
         </div>
 
-        <div className="flex justify-center items-center gap-4">
+        <div className="flex justify-center items-center gap-4 pb-1">
           {isRecording && (
             <button
               onClick={handlePauseResume}

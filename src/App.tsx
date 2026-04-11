@@ -161,8 +161,12 @@ function AppContent() {
     return 'none';
   }, [activeTab, matchId]);
 
+  const recordFillsViewport = Boolean(matchId && activeTab === 'record');
+
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div
+      className={`flex flex-col bg-black ${recordFillsViewport ? 'h-dvh max-h-dvh overflow-hidden' : 'min-h-screen'}`}
+    >
       <Header
         highlight={navHighlight}
         onHome={handleGoHome}
@@ -189,7 +193,7 @@ function AppContent() {
       {activeTab !== 'admin' && activeTab !== 'gullyRulz' && activeTab !== 'qa' && (
         <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
       )}
-      <Footer />
+      {!recordFillsViewport && <Footer />}
     </div>
   );
 }
