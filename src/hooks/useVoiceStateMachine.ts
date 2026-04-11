@@ -3,6 +3,7 @@ import { useVoiceStore, type VoiceState } from '../stores/voiceStore';
 import { useWebSpeechRecognition } from './useWebSpeechRecognition';
 import { audioController } from '../lib/audioController';
 import { parseOutcome } from '../lib/voiceParser';
+import { sanitizeTranscript, sanitizeForSpeechSynthesis } from '../lib/voiceSecurityFilter';
 
 export interface VoiceStateMachineConfig {
   wakeWord?: string;
@@ -22,14 +23,27 @@ export function useVoiceStateMachine({
     transcript,
     setState,
     setTranscript,
+    setSanitizedTranscript,
+    setRawTranscript,
     setConfirmationText,
     setError,
+    setConfidenceScore,
     reset,
   } = useVoiceStore();
 
   const interimTranscriptRef = useRef('');
   const listeningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
+
+  const triggerHapticFeedback = useCallback((pattern: number[]) => {
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(pattern);
+      } catch (e) {
+        console.debug('Haptic feedback not available');
+      }
+    }
+  }, []);
 
   const { startListening, stopListening, pauseListening, resumeListening, isSupported } =
     useWebSpeechRecognition({
@@ -58,6 +72,7 @@ export function useVoiceStateMachine({
 
   const handleWakeWordDetected = useCallback(async () => {
     await audioController.playBeep(200, 1000);
+    triggerHapticFeedback([50]);
     setState('LISTENING');
     setTranscript('');
     interimTranscriptRef.current = '';
@@ -77,31 +92,47 @@ export function useVoiceStateMachine({
     const finalTranscript = interimTranscriptRef.current.trim();
     if (!finalTranscript) {
       setError('No speech detected. Try again.');
+      triggerHapticFeedback([300]);
       setState('IDLE');
       return;
     }
+
+    const sanitized = sanitizeTranscript(finalTranscript);
+    setRawTranscript(sanitized.raw_transcript);
+    setSanitizedTranscript(sanitized.sanitized_transcript);
 
     setState('PROCESSING');
     setTranscript(finalTranscript);
 
     const parsed = parseOutcome(finalTranscript);
+    if (parsed.confidence_score) {
+      setConfidenceScore(parsed.confidence_score);
+    }
 
     setState('CONFIRMING');
     const confirmationPrompt = `I heard: ${finalTranscript}. Please confirm.`;
-    setConfirmationText(confirmationPrompt);
+    const safeSynthesisText = sanitizeForSpeechSynthesis(confirmationPrompt);
+    setConfirmationText(safeSynthesisText);
 
     pauseListening();
     isSpeakingRef.current = true;
+    triggerHapticFeedback([100, 50, 100]);
 
-    const utterance = new SpeechSynthesisUtterance(confirmationPrompt);
+    const utterance = new SpeechSynthesisUtterance(safeSynthesisText);
     utterance.rate = 0.9;
     utterance.pitch = 1;
     utterance.volume = 0.8;
 
+    utterance.onstart = () => {
+      pauseListening();
+    };
+
     utterance.onend = () => {
       isSpeakingRef.current = false;
-      resumeListening();
-      startListening();
+      setTimeout(() => {
+        resumeListening();
+        startListening();
+      }, 500);
 
       listeningTimeoutRef.current = setTimeout(() => {
         handleConfirmationTimeout();
@@ -110,7 +141,7 @@ export function useVoiceStateMachine({
 
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
-  }, [stopListening, setState, setTranscript, setConfirmationText, setError, pauseListening, resumeListening, startListening]);
+  }, [stopListening, setState, setTranscript, setSanitizedTranscript, setRawTranscript, setConfirmationText, setError, setConfidenceScore, pauseListening, resumeListening, startListening, triggerHapticFeedback]);
 
   const handleConfirmation = useCallback(async () => {
     stopListening();
@@ -119,6 +150,7 @@ export function useVoiceStateMachine({
     }
 
     await audioController.playSuccessChime();
+    triggerHapticFeedback([100, 50, 100]);
     isSpeakingRef.current = true;
 
     const utterance = new SpeechSynthesisUtterance('Saved!');
@@ -137,16 +169,17 @@ export function useVoiceStateMachine({
 
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
-  }, [stopListening, reset, setState, onConfirmed]);
+  }, [stopListening, reset, setState, onConfirmed, triggerHapticFeedback]);
 
   const handleConfirmationTimeout = useCallback(() => {
     stopListening();
+    triggerHapticFeedback([300]);
     setError('Confirmation timeout. Please try again.');
     setState('IDLE');
     if (onCancelled) {
       onCancelled();
     }
-  }, [stopListening, setError, setState, onCancelled]);
+  }, [stopListening, setError, setState, onCancelled, triggerHapticFeedback]);
 
   const cancel = useCallback(() => {
     stopListening();

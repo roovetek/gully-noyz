@@ -79,6 +79,7 @@ export interface Clip {
   is_valid_ball: boolean;
   over_number: number;
   ball_in_over: number;
+  input_method?: 'manual' | 'voice';
 }
 
 export type BallOutcome =

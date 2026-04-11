@@ -2,6 +2,7 @@ import { Info } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { MatchHeaderSummary } from './MatchHeaderSummary';
 import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
+import { VoiceSettings } from './VoiceSettings';
 import { useEffect, useState } from 'react';
 import { getEffectiveRules } from '../lib/rulesEngine';
 import { MatchRules } from '../lib/types';
@@ -43,6 +44,8 @@ export function MatchInfo() {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {rules ? (
           <div className="space-y-4">
+            <VoiceSettings />
+
             <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
               <h2 className="text-xl font-bold text-white">Overs and Balls</h2>
               <p className="text-sm text-gray-400">Overs per innings: {rules.overs_per_innings}</p>

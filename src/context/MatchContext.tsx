@@ -1,13 +1,15 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { SecureStorage } from '../lib/security';
 import { STORAGE_KEYS } from '../lib/constants';
 import { generateMatchId } from '../lib/match';
 import { UserRole } from '../lib/types';
+import { sessionManager } from '../lib/sessionTimeout';
 
 interface MatchContextType {
   matchId: string | null;
   matchName: string;
   userRole: UserRole;
+  sessionWarning: number | null;
   setMatchId: (id: string | null) => void;
   setMatchName: (name: string) => void;
   setUserRole: (role: UserRole) => void;
@@ -28,6 +30,27 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   });
 
   const [userRole, setUserRoleState] = useState<UserRole>(null);
+  const [sessionWarning, setSessionWarning] = useState<number | null>(null);
+
+  useEffect(() => {
+    sessionManager.initializeSessionMonitor();
+
+    sessionManager.onWarning((timeRemaining) => {
+      setSessionWarning(timeRemaining);
+    });
+
+    sessionManager.onExpire(() => {
+      setMatchIdState(null);
+      setMatchNameState('');
+      setUserRoleState(null);
+      setSessionWarning(null);
+    });
+
+    return () => {
+      sessionManager.stopSessionMonitor();
+      sessionManager.clearCallbacks();
+    };
+  }, []);
 
   const setMatchId = (id: string | null) => {
     setMatchIdState(id);
@@ -58,7 +81,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MatchContext.Provider value={{ matchId, matchName, userRole, setMatchId, setMatchName, setUserRole, generateMatchId, getMatchId, getMatchName }}>
+    <MatchContext.Provider value={{ matchId, matchName, userRole, sessionWarning, setMatchId, setMatchName, setUserRole, generateMatchId, getMatchId, getMatchName }}>
       {children}
     </MatchContext.Provider>
   );

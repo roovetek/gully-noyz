@@ -11,6 +11,7 @@ import { MatchStats } from './components/MatchStats';
 import { MatchInfo } from './components/MatchInfo';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Header, type NavHighlight } from './components/Header';
+import { SessionIndicator } from './components/SessionIndicator';
 import { BottomNav } from './components/BottomNav';
 import { Footer } from './components/Footer';
 import { GullyRulz } from './components/AppInfo';
@@ -188,6 +189,7 @@ function AppContent() {
         onHome={handleGoHome}
         onOpenGullyRulz={handleOpenGullyRulz}
       />
+      <SessionIndicator />
       <div className="pt-16 flex-1 flex flex-col min-h-0">
         {activeTab === 'admin' ? (
           <AdminDashboard />
