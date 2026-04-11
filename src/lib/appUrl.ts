@@ -1,12 +1,13 @@
 /** Hash-based app locations (no server rewrite needed). */
 
 export type MainTab = 'record' | 'timeline' | 'stats' | 'info';
-export type AppTab = MainTab | 'gullyRulz' | 'admin' | 'qa';
+export type AppTab = MainTab | 'gullyRulz' | 'admin' | 'qa' | 'voicePoC';
 
 export function hashFromAppState(matchId: string | null, activeTab: AppTab): string {
   if (activeTab === 'admin') return '#/admin';
   if (activeTab === 'gullyRulz') return '#/gully-rulz';
   if (activeTab === 'qa') return '#/qa';
+  if (activeTab === 'voicePoC') return '#/voice-poc';
   if (!matchId) return '#/';
   if (activeTab === 'record' || activeTab === 'timeline' || activeTab === 'stats' || activeTab === 'info') {
     return `#/m/${matchId}/${activeTab}`;
@@ -19,6 +20,7 @@ export type ParsedHash =
   | { kind: 'admin' }
   | { kind: 'qa' }
   | { kind: 'gullyRulz' }
+  | { kind: 'voicePoC' }
   | { kind: 'match'; matchId: string; tab: MainTab };
 
 export function parseAppHash(): ParsedHash {
@@ -31,6 +33,7 @@ export function parseAppHash(): ParsedHash {
   if (segments[0] === 'admin') return { kind: 'admin' };
   if (segments[0] === 'qa') return { kind: 'qa' };
   if (segments[0] === 'gully-rulz') return { kind: 'gullyRulz' };
+  if (segments[0] === 'voice-poc') return { kind: 'voicePoC' };
 
   if (segments[0] === 'm' && segments[1]) {
     const id = segments[1].trim().toUpperCase();

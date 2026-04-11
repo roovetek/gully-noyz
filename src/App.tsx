@@ -15,6 +15,7 @@ import { BottomNav } from './components/BottomNav';
 import { Footer } from './components/Footer';
 import { GullyRulz } from './components/AppInfo';
 import { QAReport } from './components/QAReport';
+import { VoicePoC } from './components/VoicePoC';
 
 function isQaReportRouteEnabled(): boolean {
   return Boolean(import.meta.env.DEV || import.meta.env.VITE_ENABLE_QA_REPORT === 'true');
@@ -26,6 +27,12 @@ function readStoredMainTab(): MainTab {
     return raw;
   }
   return 'record';
+}
+
+function handleOpenVoicePoC(): void {
+  if (typeof window !== 'undefined') {
+    window.location.hash = '#/voice-poc';
+  }
 }
 
 function AppContent() {
@@ -64,6 +71,10 @@ function AppContent() {
     }
     if (p.kind === 'gullyRulz') {
       setActiveTabState('gullyRulz');
+      return;
+    }
+    if (p.kind === 'voicePoC') {
+      setActiveTabState('voicePoC');
       return;
     }
     if (p.kind === 'qa') {
@@ -127,6 +138,10 @@ function AppContent() {
         setActiveTabState('gullyRulz');
         return;
       }
+      if (p.kind === 'voicePoC') {
+        setActiveTabState('voicePoC');
+        return;
+      }
       if (p.kind === 'qa') {
         if (isQaReportRouteEnabled()) {
           setActiveTabState('qa');
@@ -180,6 +195,8 @@ function AppContent() {
           <QAReport />
         ) : activeTab === 'gullyRulz' ? (
           <GullyRulz />
+        ) : activeTab === 'voicePoC' ? (
+          <VoicePoC />
         ) : !matchId ? (
           <MatchSelector />
         ) : (
@@ -191,7 +208,7 @@ function AppContent() {
           </>
         )}
       </div>
-      {activeTab !== 'admin' && activeTab !== 'gullyRulz' && activeTab !== 'qa' && (
+      {activeTab !== 'admin' && activeTab !== 'gullyRulz' && activeTab !== 'qa' && activeTab !== 'voicePoC' && (
         <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
       )}
       {!recordFillsViewport && <Footer />}
