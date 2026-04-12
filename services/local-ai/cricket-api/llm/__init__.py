@@ -1,0 +1,1 @@
+"""Ollama narrative / umpire phrasing."""

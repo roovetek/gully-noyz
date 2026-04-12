@@ -128,7 +128,7 @@ describe('VideoCapture smoke', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Innings 1')).toBeInTheDocument();
-      expect(screen.getByText('Start Delivery')).toBeInTheDocument();
+      expect(screen.getByText(/Start (Delivery|Recording)/)).toBeInTheDocument();
       expect(screen.getByText('AI Assist')).toBeInTheDocument();
     });
   });

@@ -250,5 +250,6 @@ export interface Clip {
   trim_end_ms?: number | null;
   hit_timestamp_ms?: number | null;
   is_highlight?: boolean | null;
+  input_method?: 'manual' | 'voice' | null;
   created_at: string;
 }

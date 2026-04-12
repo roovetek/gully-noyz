@@ -480,7 +480,7 @@ export function VideoCapture() {
       await startRecording();
     }
 
-    setVoiceToast('Delivery started');
+    setVoiceToast('Recording started');
   };
 
   const handleBallDead = () => {
@@ -491,7 +491,7 @@ export function VideoCapture() {
     const endMs = getElapsedRecordingMs();
     setTrimEndMs(endMs);
     stopRecording();
-    setVoiceToast('Ball dead marker saved');
+    setVoiceToast('Recording stopped. Choose outcome to save.');
   };
 
   const handleMarkHit = () => {
@@ -519,14 +519,20 @@ export function VideoCapture() {
   const parseVoiceCommand = (transcript: string) => {
     const normalized = transcript.toLowerCase();
 
-    if (normalized.includes('start delivery') || normalized.includes('start recording')) {
+    if (
+      normalized.includes('start delivery') ||
+      normalized.includes('start recording') ||
+      normalized.includes('begin recording')
+    ) {
       void handleStartDelivery();
       return;
     }
     if (
       normalized.includes('ball dead') ||
       normalized.includes('end play') ||
-      normalized.includes('stop delivery')
+      normalized.includes('stop delivery') ||
+      normalized.includes('stop recording') ||
+      normalized.includes('end recording')
     ) {
       handleBallDead();
       return;
@@ -699,6 +705,7 @@ export function VideoCapture() {
           trim_end_ms: trimEndMs,
           hit_timestamp_ms: hitTimestampMs,
           is_highlight: ['4', '6', 'wicket'].includes(outcomeValue),
+          input_method: 'manual',
         },
         matchId,
         execute: async () =>
@@ -718,6 +725,7 @@ export function VideoCapture() {
             trim_end_ms: trimEndMs,
             hit_timestamp_ms: hitTimestampMs,
             is_highlight: ['4', '6', 'wicket'].includes(outcomeValue),
+            input_method: 'manual',
           }),
       });
 
@@ -745,6 +753,8 @@ export function VideoCapture() {
             voice_intent_confidence: null,
             is_highlight: ['4', '6', 'wicket'].includes(outcomeValue),
             transcript: null,
+            input_method: 'manual',
+            trace_id: null,
           },
         },
       });
@@ -1089,14 +1099,14 @@ export function VideoCapture() {
             disabled={showDrawer || inningsComplete || !!overCompleteData || isUploading}
             className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
           >
-            Start Delivery
+            Start Recording
           </button>
           <button
             onClick={handleBallDead}
             disabled={!isRecording || isUploading}
             className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
           >
-            Ball Dead
+            Stop Recording
           </button>
           <button
             onClick={handleMarkHit}
@@ -1116,10 +1126,10 @@ export function VideoCapture() {
                 ? 'bg-purple-600 text-white'
                 : 'bg-purple-500 hover:bg-purple-600 text-black'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title="Hold to speak"
+            title="Hold to talk"
           >
             <Mic size={14} />
-            {isListening ? 'Listening' : 'Hold to Speak'}
+            {isListening ? 'Listening' : 'Hold to Talk'}
           </button>
         </div>
 

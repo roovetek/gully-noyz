@@ -36,6 +36,8 @@ export interface AIBallMetadata {
   voice_intent_confidence: number | null;
   is_highlight: boolean;
   transcript: string | null;
+  input_method?: 'manual' | 'voice' | null;
+  trace_id?: string | null;
 }
 
 /**

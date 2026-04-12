@@ -17,6 +17,8 @@ const DEFAULT_AI_METADATA: AIBallMetadata = {
   voice_intent_confidence: null,
   is_highlight: false,
   transcript: null,
+  input_method: null,
+  trace_id: null,
 };
 
 function isLegalDelivery(extraType: ExtraType, rules: MatchRules): boolean {

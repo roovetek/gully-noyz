@@ -1,12 +1,52 @@
 import { useCallback } from 'react';
 import { useVoiceStore } from '../stores/voiceStore';
-import { useVoiceStateMachine } from './useVoiceStateMachine';
 import { logVoiceInteraction } from '../lib/voiceAuditLog';
-import { parseOutcome } from '../lib/voiceParser';
+import { groundVoiceIntent, type VoiceExtraType } from '../lib/voiceOutcomeMapper';
+
+function getExplicitConfirmationMessage(reasons: string[] | undefined): string {
+  if (!reasons?.length) {
+    return 'Ambiguous voice command. Please repeat with one outcome only.';
+  }
+
+  if (reasons.includes('wicket-type-required')) {
+    return 'Specify the dismissal type, for example wicket bowled, wicket caught, or wicket lbw.';
+  }
+
+  if (reasons.includes('run-wicket-conflict')) {
+    return 'Say either the wicket or the runs, not both in the same command.';
+  }
+
+  if (reasons.includes('conflicting-extras')) {
+    return 'Use one extras type only, for example wide or leg bye.';
+  }
+
+  if (reasons.includes('multiple-run-values')) {
+    return 'Use one run value only, for example one run or four.';
+  }
+
+  if (reasons.includes('fuzzy-match') || reasons.includes('ambiguous-sound')) {
+    return 'That sounded close to a cricket term, but not clear enough to save. Please repeat it explicitly.';
+  }
+
+  return 'Could not determine the outcome clearly. Please repeat the command.';
+}
+
+export interface VoiceDeliveryOutcome {
+  outcome: string;
+  extraRuns: number;
+  batterRuns: number;
+  extraType?: VoiceExtraType | null;
+  dismissalType?: string;
+  confidence: number;
+  label: string;
+  rawTranscript: string;
+  traceId?: string;
+  inputMethod?: 'voice';
+}
 
 export interface VoiceIntegrationConfig {
   matchId: string;
-  onDelivered?: (outcome: any) => Promise<void>;
+  onDelivered?: (outcome: VoiceDeliveryOutcome) => Promise<void>;
   onError?: (error: string) => void;
 }
 
@@ -29,15 +69,41 @@ export function useVoiceIntegration({
   const handleVoiceConfirmed = useCallback(
     async (transcript: string) => {
       try {
-        const parsed = parseOutcome(transcript);
+        const mapped = groundVoiceIntent(transcript);
+        const parsedConfidence = mapped.confidence ?? 0;
 
-        if (parsed.confidence_score < 0.6) {
+        if (mapped.requiresManualConfirmation) {
+          const manualConfirmationMessage = getExplicitConfirmationMessage(
+            mapped.confirmationReasons
+          );
+
           await logVoiceInteraction({
             trace_id: traceId,
             match_id: matchId,
             raw_transcript: rawTranscript,
             sanitized_transcript: sanitizedTranscript,
-            confidence_score: parsed.confidence_score,
+            confidence_score: parsedConfidence,
+            confirmation_status: 'pending',
+            mode: 'voice',
+            input_method: 'voice',
+            error_message: manualConfirmationMessage,
+            retry_count: failureCount,
+          });
+
+          if (onError) {
+            onError(manualConfirmationMessage);
+          }
+          incrementFailureCount();
+          return;
+        }
+
+        if (parsedConfidence < 0.6) {
+          await logVoiceInteraction({
+            trace_id: traceId,
+            match_id: matchId,
+            raw_transcript: rawTranscript,
+            sanitized_transcript: sanitizedTranscript,
+            confidence_score: parsedConfidence,
             confirmation_status: 'pending',
             mode: 'voice',
             input_method: 'voice',
@@ -53,7 +119,18 @@ export function useVoiceIntegration({
         }
 
         if (onDelivered) {
-          await onDelivered(parsed);
+          await onDelivered({
+            outcome: mapped.outcome,
+            extraRuns: Math.max(0, mapped.extraRuns ?? 0),
+            batterRuns: Math.max(0, mapped.batterRuns ?? 0),
+            extraType: mapped.extraType ?? null,
+            dismissalType: mapped.dismissalType,
+            confidence: parsedConfidence,
+            label: mapped.displayLabel,
+            rawTranscript: mapped.sanitizedTranscript,
+            traceId,
+            inputMethod: 'voice',
+          });
         }
 
         await logVoiceInteraction({
@@ -61,7 +138,7 @@ export function useVoiceIntegration({
           match_id: matchId,
           raw_transcript: rawTranscript,
           sanitized_transcript: sanitizedTranscript,
-          confidence_score: parsed.confidence_score,
+          confidence_score: parsedConfidence,
           confirmation_status: 'confirmed',
           mode: 'voice',
           input_method: 'voice',
