@@ -14,6 +14,7 @@ test.describe('3-over x 6-ball deterministic run', () => {
     await createMatchFlow({
       name: '3Over-6Ball-Harness',
       umpirePasscode: '1234',
+      voiceModeEnabled: false,
       customizeRules: {
         oversPerInnings: 3,
         ballsPerOver: 6,

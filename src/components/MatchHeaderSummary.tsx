@@ -55,14 +55,15 @@ export function MatchHeaderSummary({ variant = 'solid', showNameEdit = true }: M
     if (!editedName.trim() || !matchId) return;
     setNameSaveError(null);
     try {
-      const { error } = await executeTrackedAction({
+      const result = await executeTrackedAction({
         tableName: 'matches',
         action: 'update_name',
         matchId,
         payload: { name: editedName.trim() },
-        execute: () =>
+        execute: async () =>
           supabase.from('matches').update({ name: editedName.trim() }).eq('match_id', matchId),
       });
+      const { error } = result as { error: unknown };
       if (error) {
         logger.error('Failed to update match name', error);
         setNameSaveError(

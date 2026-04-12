@@ -46,7 +46,7 @@ export async function validateGlobalAdminPasscodeResult(
         action: 'migrate_legacy_dashboard_hash',
         matchId: null,
         payload: {},
-        execute: () =>
+        execute: async () =>
           supabase.rpc('migrate_legacy_dashboard_hash', {
             p_legacy_hash: legacy,
           }),
@@ -72,7 +72,7 @@ export async function validateGlobalAdminPasscodeResult(
       action: 'bootstrap_global_admin_passcode',
       matchId: null,
       payload: {},
-      execute: () =>
+      execute: async () =>
         supabase.rpc('bootstrap_global_admin_passcode', {
           p_passcode: trimmed,
         }),
@@ -98,7 +98,7 @@ export async function validateGlobalAdminPasscodeResult(
     action: 'verify_global_admin_passcode',
     matchId: null,
     payload: {},
-    execute: () =>
+    execute: async () =>
       supabase.rpc('verify_global_admin_passcode', {
         p_passcode: trimmed,
       }),
@@ -126,17 +126,18 @@ export async function changeGlobalAdminPasscode(
   currentPasscode: string,
   newPasscode: string
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { data, error } = await executeTrackedAction({
+  const result = await executeTrackedAction({
     tableName: 'rpc',
     action: 'change_global_admin_passcode',
     matchId: null,
     payload: {},
-    execute: () =>
+    execute: async () =>
       supabase.rpc('change_global_admin_passcode', {
         p_current: currentPasscode.trim(),
         p_new: newPasscode.trim(),
       }),
   });
+  const { data, error } = result as { data: { ok?: boolean; error?: string } | null; error: unknown };
   if (error) {
     return { ok: false, message: userFriendlyMessage(error) };
   }
@@ -162,12 +163,12 @@ export async function resetMatchCredentials(
   input: ResetMatchCredentialsInput
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const mid = input.matchId.trim().toUpperCase();
-  const { data, error } = await executeTrackedAction({
+  const result = await executeTrackedAction({
     tableName: 'rpc',
     action: 'admin_reset_match_credentials',
     matchId: mid,
     payload: { match_id: mid },
-    execute: () =>
+    execute: async () =>
       supabase.rpc('admin_reset_match_credentials', {
         p_match_id: mid,
         p_admin_passcode: input.adminPasscode.trim(),
@@ -176,6 +177,7 @@ export async function resetMatchCredentials(
         p_new_scorer_passcode: input.newScorerPasscode.trim(),
       }),
   });
+  const { data, error } = result as { data: { ok?: boolean; error?: string } | null; error: unknown };
   if (error) {
     return { ok: false, message: userFriendlyMessage(error) };
   }

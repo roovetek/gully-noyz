@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/test';
+import { test } from './fixtures/test';
 
 test.describe('Match configuration combinations', () => {
   test('validates private match requires secret', async ({ landingPage, createMatchModalPage }) => {

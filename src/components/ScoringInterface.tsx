@@ -1,12 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { VideoCapture } from './VideoCapture';
 import { VoiceDashboard } from './VoiceDashboard';
 import { useVoiceStateMachine } from '../hooks/useVoiceStateMachine';
 import { useVoiceIntegration, type VoiceDeliveryOutcome } from '../hooks/useVoiceIntegration';
 import { useMatch } from '../context/MatchContext';
 import { useMatchClipsOptional } from '../context/MatchClipsContext';
-import { useVoiceStore } from '../stores/voiceStore';
-import { useVoiceMode } from './VoiceSettings';
+import { useCaptureMode, CaptureModePicker } from './CaptureModePicker';
 import { executeTrackedAction, supabase } from '../lib/supabase';
 import { deriveRecorderHudFromInningsClips } from '../lib/recorderFromClips';
 import { DEFAULT_GLOBAL_RULES, getEffectiveRules } from '../lib/rulesEngine';
@@ -14,26 +13,43 @@ import type { BallOutcome, MatchRules } from '../lib/types';
 import { useMatchEngine } from '../hooks/useMatchEngine';
 import { deliveryPayloadToClipInsert } from '../engine/adapters';
 import { ExtraType, WicketType, type DeliverBallActionPayload } from '../engine/types';
+import { uploadClipBlob } from '../lib/clipStorage';
 
 export interface ScoringInterfaceProps {
   onDelivered?: (outcome: VoiceDeliveryOutcome) => Promise<void>;
 }
 
+type CapturedVideo = {
+  blob: Blob;
+  durationMs: number;
+};
+
 export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
-  const voiceMode = useVoiceMode();
+  const captureMode = useCaptureMode();
   const { matchId } = useMatch();
   const matchClips = useMatchClipsOptional();
   const { initialize: initializeEngine, dispatch: dispatchEngine } = useMatchEngine();
 
   // Some tests mount Record/ScoringInterface without MatchClipsProvider.
   if (!matchClips) {
-    return <VideoCapture />;
+    return (
+      <div className="flex h-full flex-col">
+        <div className="px-3 pt-3 pb-2">
+          <CaptureModePicker />
+        </div>
+        <div className="min-h-0 flex-1">
+          <div className="h-full w-full" data-testid="video-capture" />
+        </div>
+      </div>
+    );
   }
 
   const { clips, refresh, currentInnings, ballsPerOver, totalOvers } = matchClips;
 
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [rules, setRules] = useState<MatchRules>(DEFAULT_GLOBAL_RULES);
+  const [capturePhase, setCapturePhase] = useState<'idle' | 'voice-pending'>('idle');
+  const [capturedVideo, setCapturedVideo] = useState<CapturedVideo | null>(null);
 
   const inningsClips = useMemo(
     () => clips.filter((clip) => clip.innings_number === currentInnings),
@@ -119,13 +135,22 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
         rules,
       });
 
+      let videoUrl: string | null = null;
+      if (capturedVideo) {
+        videoUrl = await uploadClipBlob({
+          matchId,
+          blob: capturedVideo.blob,
+          contentType: capturedVideo.blob.type || 'video/webm',
+        });
+      }
+
       const { error: dbError } = await executeTrackedAction({
         tableName: 'clips',
         action: 'insert',
         payload: {
           ...clipInsert,
-          video_url: null,
-          duration: 0,
+          video_url: videoUrl,
+          duration: capturedVideo ? Math.round(capturedVideo.durationMs / 1000) : 0,
           trim_start_ms: null,
           trim_end_ms: null,
           hit_timestamp_ms: null,
@@ -136,8 +161,8 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
         execute: async () =>
           supabase.from('clips').insert({
             ...clipInsert,
-            video_url: null,
-            duration: 0,
+            video_url: videoUrl,
+            duration: capturedVideo ? Math.round(capturedVideo.durationMs / 1000) : 0,
             trim_start_ms: null,
             trim_end_ms: null,
             hit_timestamp_ms: null,
@@ -160,6 +185,9 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
 
       await refresh();
 
+      setCapturePhase('idle');
+      setCapturedVideo(null);
+
       if (onDelivered) {
         await onDelivered(outcome);
       }
@@ -175,6 +203,7 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
       onDelivered,
       refresh,
       rules,
+      capturedVideo,
       mapDismissalType,
       mapVoiceExtraType,
     ]
@@ -186,7 +215,7 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
     onError: setVoiceError,
   });
 
-  const { startLoop, cancel, handleRecordingComplete, isSupported: isVoiceSupported } =
+  const { startLoop, cancel, handleRecordingComplete, confirmCurrent, isSupported: isVoiceSupported } =
     useVoiceStateMachine({
       wakeWord: 'start recording',
       confirmationWord: 'confirmed',
@@ -204,20 +233,47 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
   }, [handleRecordingComplete]);
 
   const handleVoiceConfirm = useCallback(() => {
-    const voiceState = useVoiceStore.getState();
-    handleVoiceConfirmed(voiceState.sanitizedTranscript);
-  }, [handleVoiceConfirmed]);
+    setVoiceError(null);
+    confirmCurrent();
+  }, [confirmCurrent]);
 
   const handleVoiceCancel = useCallback(() => {
     cancel();
     setVoiceError(null);
+    setCapturePhase('idle');
+    setCapturedVideo(null);
   }, [cancel]);
 
-  if (!voiceMode || !isVoiceSupported || failureCount >= 3) {
-    return <VideoCapture />;
-  }
+  const handleVideoDone = useCallback((blob: Blob, durationMs: number) => {
+    setCapturedVideo({ blob, durationMs });
+    setCapturePhase('voice-pending');
+    setVoiceError(null);
+    startLoop();
+  }, [startLoop]);
 
-  if (voiceMode && isVoiceSupported) {
+  const renderCaptureArea = () => {
+    if (!isVoiceSupported || failureCount >= 3) {
+      return <VideoCapture />;
+    }
+    if (captureMode === 'manual') {
+      return <VideoCapture />;
+    }
+    if (captureMode === 'video+voice') {
+      if (capturePhase === 'voice-pending') {
+        return (
+          <VoiceDashboard
+            onStart={handleVoiceStart}
+            onStop={handleVoiceStop}
+            onConfirm={handleVoiceConfirm}
+            onCancel={handleVoiceCancel}
+            error={voiceError}
+            videoAttached={capturedVideo !== null}
+          />
+        );
+      }
+      return <VideoCapture onRecordingDone={handleVideoDone} />;
+    }
+    // voice-only mode
     return (
       <VoiceDashboard
         onStart={handleVoiceStart}
@@ -227,7 +283,16 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
         error={voiceError}
       />
     );
-  }
+  };
 
-  return <VideoCapture />;
+  return (
+    <div className="flex h-full flex-col">
+      <div className="relative z-20 px-3 pt-3 pb-2">
+        <CaptureModePicker />
+      </div>
+      <div className="min-h-0 flex-1">
+        {renderCaptureArea()}
+      </div>
+    </div>
+  );
 }

@@ -5,7 +5,7 @@ import { MatchList } from './MatchList';
 import { CreateMatchModal } from './CreateMatchModal';
 import { SecretPrompt } from './SecretPrompt';
 import { supabase } from '../lib/supabase';
-import { hashSecret, verifySecret, SecureStorage } from '../lib/security';
+import { verifySecret, SecureStorage } from '../lib/security';
 import { validateMatchId, normalizeMatchId } from '../lib/validation';
 import { STORAGE_KEYS, ERROR_MESSAGES } from '../lib/constants';
 

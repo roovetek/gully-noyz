@@ -2,10 +2,10 @@ import { Info } from 'lucide-react';
 import { useMatch } from '../context/MatchContext';
 import { MatchHeaderSummary } from './MatchHeaderSummary';
 import { MatchPageSummaryStrip } from './MatchPageSummaryStrip';
-import { VoiceSettings } from './VoiceSettings';
 import { useEffect, useState } from 'react';
 import { getEffectiveRules } from '../lib/rulesEngine';
 import { MatchRules } from '../lib/types';
+import { CaptureModePicker } from './CaptureModePicker';
 
 export function MatchInfo() {
   const { matchId } = useMatch();
@@ -44,7 +44,13 @@ export function MatchInfo() {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {rules ? (
           <div className="space-y-4">
-            <VoiceSettings />
+            <div className="rounded-2xl border border-blue-700 bg-blue-950 p-5">
+              <h2 className="text-xl font-bold text-white">Capture Mode</h2>
+              <p className="mb-3 text-sm text-blue-200">
+                Choose whether deliveries are logged by video then voice, voice only, or manual entry.
+              </p>
+              <CaptureModePicker />
+            </div>
 
             <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5">
               <h2 className="text-xl font-bold text-white">Overs and Balls</h2>

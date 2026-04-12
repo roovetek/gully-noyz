@@ -23,6 +23,7 @@ import {
 import { writeAIDecisionTrace } from '../lib/aiDecisionTrace';
 import { userFriendlyMessage } from '../lib/userFriendlyError';
 import { ERROR_MESSAGES } from '../lib/constants';
+import { uploadClipBlob } from '../lib/clipStorage';
 
 interface RecordingData {
   blob: Blob;
@@ -77,7 +78,11 @@ function getCameraUserMessage(err: unknown): string {
   return 'Could not access the camera or microphone. Check permissions and try again.';
 }
 
-export function VideoCapture() {
+export interface VideoCaptureProps {
+  onRecordingDone?: (blob: Blob, durationMs: number) => void;
+}
+
+export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
   const { matchId } = useMatch();
   const { clips, refresh, currentInnings, ballsPerOver, totalOvers } = useMatchClips();
   const { initialize: initializeEngine, dispatch: dispatchEngine } = useMatchEngine();
@@ -318,6 +323,12 @@ export function VideoCapture() {
         setRecordingData(data);
         setConfirmBallNumber(ballNumber);
         setConfirmDeliveryNumber(deliveryNumber);
+
+        if (onRecordingDone) {
+          onRecordingDone(blob, recordingTime * 1000);
+          return;
+        }
+
         setShowDrawer(true);
 
         console.log('Recording stopped', {
@@ -667,23 +678,11 @@ export function VideoCapture() {
       let videoUrl: string | null = null;
 
       if (recordingData) {
-        const fileName = `${matchId}/${Date.now()}.webm`;
-        const { error: uploadError } = await executeTrackedAction({
-          tableName: 'storage.clips',
-          action: 'upload',
+        videoUrl = await uploadClipBlob({
           matchId,
-          payload: { fileName, contentType: 'video/webm' },
-          execute: () =>
-            supabase.storage
-              .from('clips')
-              .upload(fileName, recordingData.blob, {
-                contentType: 'video/webm',
-                upsert: false,
-              }),
+          blob: recordingData.blob,
+          contentType: 'video/webm',
         });
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from('clips').getPublicUrl(fileName);
-        videoUrl = urlData.publicUrl;
       }
 
       const { error: dbError } = await executeTrackedAction({

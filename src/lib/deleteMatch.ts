@@ -75,7 +75,7 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
     action: 'verify_global_admin_passcode',
     matchId: null,
     payload: {},
-    execute: () =>
+    execute: async () =>
       supabase.rpc('verify_global_admin_passcode', {
         p_passcode: pass,
       }),
@@ -100,21 +100,23 @@ export async function deleteMatch(matchId: string, adminPasscode: string): Promi
     },
   });
 
-  const { data, error } = await executeTrackedAction({
+  const result = await executeTrackedAction({
     tableName: 'rpc',
     action: 'admin_delete_match',
     matchId: trimmed,
     payload: { match_id: trimmed },
-    execute: () =>
+    execute: async () =>
       supabase.rpc('admin_delete_match', {
         p_match_id: trimmed,
         p_passcode: pass,
       }),
   });
+  const { data, error } = result as { data: RpcDeleteResult | null; error: unknown };
 
   if (error) {
-    const hint = deleteMatchErrorHint(error.message);
-    if (hint !== error.message) {
+    const rawMessage = error instanceof Error ? error.message : String(error ?? '');
+    const hint = deleteMatchErrorHint(rawMessage);
+    if (hint !== rawMessage) {
       return { ok: false, message: hint };
     }
     return { ok: false, message: userFriendlyMessage(error) };

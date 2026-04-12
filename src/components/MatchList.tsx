@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Users, Video, CreditCard as Edit2, Lock, Check, X, Search } from 'lucide-react';
+import { ArrowLeft, Video, CreditCard as Edit2, Lock, Check, X, Search } from 'lucide-react';
 import { executeTrackedAction, supabase } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 import { SecretPrompt } from './SecretPrompt';
@@ -238,7 +238,7 @@ export function MatchList({ onBack }: MatchListProps) {
     if (!newName.trim()) return;
 
     try {
-      const { error } = await executeTrackedAction({
+      const result = await executeTrackedAction({
         tableName: 'matches',
         action: 'update_from_list',
         matchId,
@@ -248,7 +248,7 @@ export function MatchList({ onBack }: MatchListProps) {
           overs_per_innings: newTotalOvers,
           balls_per_over: newBallsPerOver,
         },
-        execute: () =>
+        execute: async () =>
           supabase
             .from('matches')
             .update({
@@ -259,6 +259,7 @@ export function MatchList({ onBack }: MatchListProps) {
             })
             .eq('match_id', matchId),
       });
+          const { error } = result as { error: unknown };
 
       if (error) throw error;
 

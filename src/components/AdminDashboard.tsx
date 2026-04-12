@@ -12,17 +12,13 @@ import { getDeploymentInfo, validateDeploymentSync, DeploymentInfo } from '../li
 import { logger } from '../lib/logger';
 import { userFriendlyMessage } from '../lib/userFriendlyError';
 
-interface AdminDashboardProps {
-  onClose?: () => void;
-}
-
 interface AdminMatchRow {
   match_id: string;
   name: string | null;
   created_at: string;
 }
 
-export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
+export function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   /** In-memory only: used for RPCs that require dashboard passcode (save rules, delete match). */
   const [adminSessionSecret, setAdminSessionSecret] = useState('');
@@ -65,11 +61,6 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     const globalRules = await getGlobalRules();
     setRules(globalRules ?? DEFAULT_GLOBAL_RULES);
   };
-
-  const closeDashboard = useCallback(() => {
-    setAdminSessionSecret('');
-    onClose();
-  }, [onClose]);
 
   const handleAuth = async () => {
     if (!passcode.trim()) {
@@ -137,6 +128,8 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
     if (Number.isNaN(n)) return;
     setRules({ ...rules, [key]: Math.min(max, Math.max(min, n)) });
   };
+
+  const editableRules = rules ?? DEFAULT_GLOBAL_RULES;
 
   const loadAdminMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -548,7 +541,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                 </label>
                 <input
                   type="number"
-                  value={rules.overs_per_innings}
+                  value={editableRules.overs_per_innings}
                   onChange={(e) => setNumericRule('overs_per_innings', e.target.value, 1, 50)}
                   min="1"
                   max="50"
@@ -562,7 +555,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                 </label>
                 <input
                   type="number"
-                  value={rules.balls_per_over}
+                  value={editableRules.balls_per_over}
                   onChange={(e) => setNumericRule('balls_per_over', e.target.value, 2, 8)}
                   min="2"
                   max="8"
@@ -576,7 +569,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                 </label>
                 <input
                   type="number"
-                  value={rules.max_wickets}
+                  value={editableRules.max_wickets}
                   onChange={(e) => setNumericRule('max_wickets', e.target.value, 1, 11)}
                   min="1"
                   max="11"
@@ -590,7 +583,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
                 </label>
                 <input
                   type="number"
-                  value={rules.max_overs_per_bowler}
+                  value={editableRules.max_overs_per_bowler}
                   onChange={(e) => setNumericRule('max_overs_per_bowler', e.target.value, 1, 10)}
                   min="1"
                   max="10"
@@ -605,7 +598,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={rules.wide_no_runs}
+                  checked={editableRules.wide_no_runs}
                   onChange={(e) => updateRule('wide_no_runs', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
@@ -615,7 +608,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={rules.wide_no_ball_count}
+                  checked={editableRules.wide_no_ball_count}
                   onChange={(e) => updateRule('wide_no_ball_count', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
@@ -625,7 +618,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={rules.legbye_no_runs}
+                  checked={editableRules.legbye_no_runs}
                   onChange={(e) => updateRule('legbye_no_runs', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
@@ -635,7 +628,7 @@ export function AdminDashboard({ onClose = () => {} }: AdminDashboardProps) {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={rules.consecutive_overs_required}
+                  checked={editableRules.consecutive_overs_required}
                   onChange={(e) => updateRule('consecutive_overs_required', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />

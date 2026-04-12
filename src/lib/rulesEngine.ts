@@ -58,17 +58,18 @@ export async function updateGlobalRules(
     throw new Error('Admin Console passcode is required to update global rules.');
   }
 
-  const { data, error } = await executeTrackedAction({
+  const result = await executeTrackedAction({
     tableName: 'rpc',
     action: 'update_global_rules_as_admin',
     matchId: null,
     payload: { rules },
-    execute: () =>
+    execute: async () =>
       supabase.rpc('update_global_rules_as_admin', {
         p_passcode: pass,
         p_rules: rules as Record<string, unknown>,
       }),
   });
+  const { data, error } = result as { data: { ok?: boolean; error?: string } | null; error: unknown };
 
   if (error) {
     throw new Error(
@@ -148,7 +149,7 @@ export async function applyOverride(
     action: 'insert',
     matchId,
     payload: { rule_name: ruleName, reason, applied_by_role: role },
-    execute: () =>
+    execute: async () =>
       supabase.from('match_rule_overrides').insert({
         match_id: matchId,
         rule_name: ruleName,
@@ -172,7 +173,7 @@ export async function revertOverride(overrideId: string, role: 'umpire'): Promis
     action: 'revert',
     matchId: null,
     payload: { override_id: overrideId, reverted_by_role: role },
-    execute: () =>
+    execute: async () =>
       supabase
         .from('match_rule_overrides')
         .update({

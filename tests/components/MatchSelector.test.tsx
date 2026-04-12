@@ -8,7 +8,6 @@ const {
   setMatchNameMock,
   secureStorageGetItemMock,
   maybeSingleMock,
-  eqMock,
   selectMock,
   fromMock,
 } = vi.hoisted(() => {
@@ -21,7 +20,6 @@ const {
     setMatchNameMock: vi.fn(),
     secureStorageGetItemMock: vi.fn(() => null),
     maybeSingleMock: maybeSingle,
-    eqMock: eq,
     selectMock: select,
     fromMock: from,
   };

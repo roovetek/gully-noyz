@@ -11,7 +11,7 @@ describe('dismissalOptions', () => {
     const order = getDismissalOptionOrder();
 
     expect(order.slice(0, 5)).toEqual(['bowled', 'caught', 'lbw', 'runout', 'stumped']);
-    expect(order.at(-1)).toBe('unknown');
+    expect(order[order.length - 1]).toBe('unknown');
     expect(order).toHaveLength(DISMISSAL_TYPES.length);
     expect(new Set(order).size).toBe(order.length);
   });
@@ -28,7 +28,7 @@ describe('dismissalOptions', () => {
 
     expect(options).toHaveLength(DISMISSAL_TYPES.length);
     expect(options[0]).toEqual({ value: 'bowled', label: 'Bowled' });
-    expect(options.at(-1)).toEqual({ value: 'unknown', label: 'Other' });
+    expect(options[options.length - 1]).toEqual({ value: 'unknown', label: 'Other' });
   });
 });
 

@@ -10,6 +10,7 @@ import { createMatchAccess } from '../lib/accessControl';
 import { MatchRules } from '../lib/types';
 import { logger } from '../lib/logger';
 import { userFriendlyMessage } from '../lib/userFriendlyError';
+import { setCaptureMode } from './CaptureModePicker';
 
 interface CreateMatchModalProps {
   onClose: () => void;
@@ -25,6 +26,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
   const [rules, setRules] = useState<MatchRules | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [voiceModeEnabled, setVoiceModeEnabledState] = useState(true);
 
   useEffect(() => {
     loadGlobalRules();
@@ -102,6 +104,9 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
       }
 
       await createMatchAccess(newMatchId, umpirePasscode.trim());
+
+      // Apply default capture mode for the newly created match session.
+      setCaptureMode(voiceModeEnabled ? 'voice' : 'manual');
 
       onMatchCreated(newMatchId, isPrivate ? matchSecret : undefined, matchName.trim());
     } catch (err) {
@@ -235,6 +240,26 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-blue-700 bg-blue-950/40 p-3">
+            <div>
+              <p className="text-sm font-semibold text-blue-300">Voice Mode</p>
+              <p className="text-xs text-blue-200">Enable voice-assisted scoring for this session.</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Enable voice mode by default"
+              aria-pressed={voiceModeEnabled}
+              onClick={() => setVoiceModeEnabledState((current) => !current)}
+              className={`rounded-md px-3 py-1 text-sm font-semibold transition-colors ${
+                voiceModeEnabled
+                  ? 'bg-blue-400 text-black hover:bg-blue-300'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
+              }`}
+            >
+              {voiceModeEnabled ? 'Enabled' : 'Disabled'}
+            </button>
           </div>
 
           <div>

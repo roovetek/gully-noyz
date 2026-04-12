@@ -15,7 +15,7 @@ export async function completeMatch(
     action: 'complete_status',
     matchId,
     payload: { status, result_type: resultType },
-    execute: () =>
+    execute: async () =>
       supabase
         .from('matches')
         .update({
@@ -37,7 +37,7 @@ export async function completeMatch(
     action: 'insert',
     matchId,
     payload: { status: resultType === 'tie' ? 'tie' : status, completed_by_role: completedByRole },
-    execute: () =>
+    execute: async () =>
       supabase.from('match_results').insert({
         match_id: matchId,
         status: resultType === 'tie' ? 'tie' : status,
@@ -121,7 +121,7 @@ export async function deleteLastBall(matchId: string, innings: number): Promise<
     action: 'delete_last_ball',
     matchId,
     payload: { clip_id: data.id, innings },
-    execute: () => supabase.from('clips').delete().eq('id', data.id),
+    execute: async () => supabase.from('clips').delete().eq('id', data.id),
   });
 
   if (deleteError) {

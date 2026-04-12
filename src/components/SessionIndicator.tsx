@@ -1,4 +1,3 @@
-import React from 'react';
 import { useMatch } from '../context/MatchContext';
 
 export function SessionIndicator() {

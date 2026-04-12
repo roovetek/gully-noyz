@@ -13,7 +13,7 @@ test.describe('UI alignment regression', () => {
     });
 
     const inningsBadge = page.getByTestId('match-header-innings-1-label');
-    const startDelivery = page.getByRole('button', { name: 'Start Delivery' });
+    const startDelivery = page.getByRole('button', { name: 'Start Recording' }).first();
     await expect(inningsBadge).toBeVisible();
     await expect(startDelivery).toBeVisible();
 
@@ -40,6 +40,7 @@ test.describe('UI alignment regression', () => {
     await createMatchFlow({
       name: 'UI Drawer Alignment Match',
       umpirePasscode: '1234',
+      voiceModeEnabled: false,
     });
 
     await recordPage.openManualOutcomeDrawer();

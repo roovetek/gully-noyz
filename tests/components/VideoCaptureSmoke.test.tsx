@@ -172,7 +172,7 @@ describe('VideoCapture smoke', () => {
     );
 
     expect(options[1]).toBe('Bowled');
-    expect(options.at(-1)).toBe('Other');
+    expect(options[options.length - 1]).toBe('Other');
   });
 
   it('allows changing AI Assist mode from Manual only', async () => {

@@ -8,8 +8,30 @@ import { sanitizeTranscript, sanitizeForSpeechSynthesis } from '../lib/voiceSecu
 export interface VoiceStateMachineConfig {
   wakeWord?: string;
   confirmationWord?: string;
-  onConfirmed?: (transcript: string) => void;
+  onConfirmed?: (transcript: string) => void | Promise<void>;
   onCancelled?: () => void;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>;
+    const candidate =
+      value.message ??
+      value.error_description ??
+      value.details ??
+      value.hint ??
+      value.code;
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return 'Failed to save voice outcome.';
 }
 
 export function useVoiceStateMachine({
@@ -50,6 +72,7 @@ export function useVoiceStateMachine({
 
   const pauseListeningRef = useRef<(() => void) | null>(null);
   const resumeListeningRef = useRef<(() => void) | null>(null);
+  const handleRecordingCompleteRef = useRef<() => void>(() => {});
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -80,19 +103,43 @@ export function useVoiceStateMachine({
     });
   }, []);
 
+  const beginListeningWindow = useCallback(async () => {
+    clearTimer();
+    await audioController.playBeep(150, 880);
+    triggerHapticFeedback([50]);
+    capturedRef.current = '';
+    setTranscript('');
+    setError(null);
+    setState('LISTENING');
+    timerRef.current = setTimeout(() => {
+      handleRecordingCompleteRef.current();
+    }, 5000);
+  }, [clearTimer, triggerHapticFeedback, setTranscript, setError, setState]);
+
   const doConfirmAndSave = useCallback(async () => {
     clearTimer();
     stopListeningRef.current?.();
     window.speechSynthesis.cancel();
     setState('PROCESSING');
-    await audioController.playSuccessChime();
-    await speak('Saved!');
-    triggerHapticFeedback([100, 50, 100]);
 
     const safeTranscript = sanitizeTranscript(capturedRef.current).sanitized_transcript;
-    reset();
-    stateRef.current = 'IDLE';
-    if (onConfirmedRef.current) onConfirmedRef.current(safeTranscript);
+    try {
+      if (onConfirmedRef.current) {
+        await onConfirmedRef.current(safeTranscript);
+      }
+      await audioController.playSuccessChime();
+      await speak('Saved!');
+      triggerHapticFeedback([100, 50, 100]);
+
+      reset();
+      stateRef.current = 'IDLE';
+    } catch (error) {
+      await audioController.playBeep(180, 320);
+      triggerHapticFeedback([220]);
+      const message = getErrorMessage(error);
+      setError(message);
+      setState('IDLE');
+    }
   }, [clearTimer, setState, speak, triggerHapticFeedback, reset]);
 
   const handleRecordingComplete = useCallback(async () => {
@@ -144,6 +191,12 @@ export function useVoiceStateMachine({
     speak,
   ]);
 
+  useEffect(() => {
+    handleRecordingCompleteRef.current = () => {
+      void handleRecordingComplete();
+    };
+  }, [handleRecordingComplete]);
+
   const {
     startListening,
     stopListening,
@@ -157,17 +210,7 @@ export function useVoiceStateMachine({
 
         if (cur === 'IDLE') {
           if (isFinal && text.toLowerCase().includes(wakeWord.toLowerCase())) {
-            void (async () => {
-              clearTimer();
-              await audioController.playBeep(150, 880);
-              triggerHapticFeedback([50]);
-              capturedRef.current = '';
-              setTranscript('');
-              setState('LISTENING');
-              timerRef.current = setTimeout(() => {
-                void handleRecordingComplete();
-              }, 5000);
-            })();
+            void beginListeningWindow();
           }
           return;
         }
@@ -198,11 +241,7 @@ export function useVoiceStateMachine({
       [
         wakeWord,
         confirmationWord,
-        clearTimer,
-        triggerHapticFeedback,
-        setTranscript,
-        setState,
-        handleRecordingComplete,
+        beginListeningWindow,
         doConfirmAndSave,
         setError,
       ]
@@ -239,6 +278,7 @@ export function useVoiceStateMachine({
     setConfidenceScore(0);
     capturedRef.current = '';
     startListening();
+    void beginListeningWindow();
   }, [
     isSupported,
     clearTimer,
@@ -249,8 +289,17 @@ export function useVoiceStateMachine({
     setSanitizedTranscript,
     setConfidenceScore,
     startListening,
+    beginListeningWindow,
     setError,
   ]);
+
+  const confirmCurrent = useCallback(() => {
+    if (stateRef.current !== 'CONFIRMING') {
+      setError('No voice outcome is awaiting confirmation.');
+      return;
+    }
+    void doConfirmAndSave();
+  }, [setError, doConfirmAndSave]);
 
   const cancel = useCallback(() => {
     clearTimer();
@@ -263,5 +312,13 @@ export function useVoiceStateMachine({
     if (onCancelledRef.current) onCancelledRef.current();
   }, [clearTimer, stopListening, setError, reset, setState]);
 
-  return { state, transcript, startLoop, cancel, handleRecordingComplete, isSupported };
+  return {
+    state,
+    transcript,
+    startLoop,
+    cancel,
+    handleRecordingComplete,
+    confirmCurrent,
+    isSupported,
+  };
 }

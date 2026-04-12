@@ -19,6 +19,15 @@ export class CreateMatchModalPage {
     else await box.uncheck();
   }
 
+  async setVoiceModeEnabled(enabled: boolean) {
+    const toggle = this.page.getByRole('button', { name: 'Enable voice mode by default' });
+    await expect(toggle).toBeVisible();
+    const pressed = (await toggle.getAttribute('aria-pressed')) === 'true';
+    if (pressed !== enabled) {
+      await toggle.click();
+    }
+  }
+
   async submitCreate() {
     await this.page.getByTestId('create-match-submit').click();
   }
@@ -32,6 +41,10 @@ export class CreateMatchModalPage {
   async createMatch(options: CreateMatchOptions) {
     await this.expectVisible();
     await this.fillBasics(options.name, options.umpirePasscode);
+
+    if (options.voiceModeEnabled !== undefined) {
+      await this.setVoiceModeEnabled(options.voiceModeEnabled);
+    }
 
     if (options.customizeRules) {
       await this.page.getByRole('button', { name: 'Toggle customize rules' }).click();

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Mic, MicOff, Check, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Mic, MicOff, Check, X, Video } from 'lucide-react';
 import { useVoiceStore } from '../stores/voiceStore';
 
 export interface VoiceDashboardProps {
@@ -8,6 +8,7 @@ export interface VoiceDashboardProps {
   onStart: () => void;
   onStop: () => void;
   error?: string | null;
+  videoAttached?: boolean;
 }
 
 export function VoiceDashboard({
@@ -16,6 +17,7 @@ export function VoiceDashboard({
   onStart,
   onStop,
   error,
+  videoAttached,
 }: VoiceDashboardProps) {
   const { state, sanitizedTranscript, confirmationText, confidenceScore, isListening } = useVoiceStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,34 +90,62 @@ export function VoiceDashboard({
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-4">
-      <div className={`w-full max-w-md p-8 rounded-2xl border-2 shadow-lg ${getStateColor()} transition-all duration-200`}>
-        <div className="text-center mb-8">
-          <div className={`inline-block px-4 py-2 rounded-full font-bold text-lg ${getStateTextColor()} mb-2`}>
+    <div className="flex flex-col items-start bg-gradient-to-b from-slate-50 to-slate-100 p-4 pt-5 pb-6 min-h-full">
+      <div className={`w-full max-w-md mx-auto p-5 rounded-2xl border-2 shadow-lg ${getStateColor()} transition-all duration-200`}>
+        <div className="flex items-center justify-between mb-4">
+          <div className={`inline-block px-3 py-1 rounded-full font-bold text-base ${getStateTextColor()}`}>
             {getStateLabel()}
           </div>
+          {videoAttached && (state === 'IDLE' || state === 'CONFIRMING') && (
+            <span className="flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
+              <Video size={12} />
+              Video captured
+            </span>
+          )}
           {state === 'LISTENING' && (
-            <div className="animate-pulse text-blue-600">Recording...</div>
+            <span className="animate-pulse text-sm font-medium text-blue-600">● Recording…</span>
           )}
         </div>
+
+        {state === 'IDLE' && (
+          <div className="mb-4 rounded-xl bg-white border border-gray-200 p-4 space-y-2.5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">How it works</p>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
+              <p className="text-sm text-gray-700">Tap <strong>Start Recording</strong> — the mic opens immediately.</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">2</span>
+              <p className="text-sm text-gray-700">Say the outcome clearly — e.g. <em>"four runs"</em>, <em>"wide"</em>, <em>"bowled"</em>.</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">3</span>
+              <p className="text-sm text-gray-700">Tap <strong>Stop</strong> when done speaking.</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center">4</span>
+              <p className="text-sm text-gray-700">Review the match, then tap <strong>Confirm</strong> or say <em>"confirmed"</em> to save.</p>
+            </div>
+          </div>
+        )}
 
         {state === 'LISTENING' && (
           <canvas
             ref={canvasRef}
             width={280}
             height={60}
-            className="w-full mb-6 rounded-lg bg-gray-100"
+            className="w-full mb-4 rounded-lg bg-gray-100"
           />
         )}
 
         {state === 'PROCESSING' && (
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-200 border-t-amber-600"></div>
           </div>
         )}
 
         {(state === 'LISTENING' || state === 'PROCESSING') && sanitizedTranscript && (
-          <div className="bg-white rounded-lg p-4 mb-6 border border-gray-200">
+          <div className="bg-white rounded-lg p-4 mb-4 border border-gray-200">
             <p className="text-sm text-gray-600 mb-2">Raw Input:</p>
             <p className="text-base font-medium text-gray-900 break-words">{sanitizedTranscript}</p>
             {confidenceScore > 0 && (
@@ -135,7 +165,7 @@ export function VoiceDashboard({
         )}
 
         {state === 'CONFIRMING' && confirmationText && (
-          <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-4 mb-6 border border-purple-200">
+          <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-4 mb-4 border border-purple-200">
             <p className="text-sm text-gray-600 mb-2">Please confirm:</p>
             <p className="text-base font-medium text-purple-900 break-words">{confirmationText}</p>
             <div className="mt-3 text-xs text-purple-700">Say "confirmed" or tap the button below</div>
@@ -143,7 +173,7 @@ export function VoiceDashboard({
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-6">
+          <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4">
             <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
@@ -198,12 +228,28 @@ export function VoiceDashboard({
           )}
         </div>
 
-        <p className="text-xs text-gray-500 text-center mt-4">
-          {state === 'IDLE' && 'Tap "Start Recording" to begin voice input'}
-          {state === 'LISTENING' && 'Listening for cricket terminology...'}
-          {state === 'PROCESSING' && 'Processing your input...'}
-          {state === 'CONFIRMING' && 'Confirm by saying "confirmed" or tapping the button'}
-        </p>
+        <div className="text-xs text-center mt-4 space-y-1">
+          {state === 'IDLE' && (
+            <p className="text-gray-500">
+              {videoAttached ? 'Video captured. Add the spoken outcome to save this delivery.' : 'Audio only — no camera needed.'}
+            </p>
+          )}
+          {state === 'LISTENING' && (
+            <>
+              <p className="font-semibold text-blue-600">Speak the delivery outcome now</p>
+              <p className="text-gray-500">e.g. "dot ball", "six", "LBW", "no ball one run"</p>
+            </>
+          )}
+          {state === 'PROCESSING' && (
+            <p className="text-gray-500">Analysing what you said…</p>
+          )}
+          {state === 'CONFIRMING' && (
+            <>
+              <p className="font-semibold text-purple-600">Does this look right?</p>
+              <p className="text-gray-500">Say <em>"confirmed"</em> or tap Confirm to save, or Cancel to retry.</p>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

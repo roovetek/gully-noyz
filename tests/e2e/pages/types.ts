@@ -1,6 +1,7 @@
 export interface CreateMatchOptions {
   name: string;
   umpirePasscode: string;
+  voiceModeEnabled?: boolean;
   isPrivate?: boolean;
   secret?: string;
   customizeRules?: {

@@ -3,6 +3,28 @@ import { useVoiceStore } from '../stores/voiceStore';
 import { logVoiceInteraction } from '../lib/voiceAuditLog';
 import { groundVoiceIntent, type VoiceExtraType } from '../lib/voiceOutcomeMapper';
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>;
+    const candidate =
+      value.message ??
+      value.error_description ??
+      value.details ??
+      value.hint ??
+      value.code;
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return 'Unknown error processing voice input';
+}
+
 function getExplicitConfirmationMessage(reasons: string[] | undefined): string {
   if (!reasons?.length) {
     return 'Ambiguous voice command. Please repeat with one outcome only.';
@@ -56,7 +78,6 @@ export function useVoiceIntegration({
   onError,
 }: VoiceIntegrationConfig) {
   const {
-    state,
     traceId,
     rawTranscript,
     sanitizedTranscript,
@@ -147,7 +168,7 @@ export function useVoiceIntegration({
 
         resetFailureCount();
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error processing voice input';
+        const message = getErrorMessage(err);
 
         await logVoiceInteraction({
           trace_id: traceId,

@@ -15,6 +15,7 @@ test.describe('2026-04-09-Test1 runthrough', () => {
     await createMatchFlow({
       name: '2026-04-09-Test1',
       umpirePasscode: '1234',
+      voiceModeEnabled: false,
     });
 
     await recordPage.expectLoaded();

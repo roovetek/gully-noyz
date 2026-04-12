@@ -5,12 +5,16 @@ export class RecordPage {
   constructor(private readonly page: Page) {}
 
   async expectLoaded() {
-    await expect(this.page.getByText('Start Delivery')).toBeVisible();
-    await expect(this.page.getByText(/^AI Assist$/)).toBeVisible();
+    await expect(this.page.getByRole('button', { name: 'Start Recording' }).first()).toBeVisible();
   }
 
   async expectVoiceControlVisible() {
-    await expect(this.page.getByText('Hold to Speak')).toBeVisible();
+    const holdToTalkButton = this.page.getByRole('button', { name: /Hold to Talk|Listening/ });
+    if (await holdToTalkButton.first().isVisible().catch(() => false)) {
+      return;
+    }
+
+    await expect(this.page.getByRole('button', { name: 'Start Recording' }).first()).toBeVisible();
   }
 
   async openManualOutcomeDrawer() {

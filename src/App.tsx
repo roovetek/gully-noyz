@@ -30,12 +30,6 @@ function readStoredMainTab(): MainTab {
   return 'record';
 }
 
-function handleOpenVoicePoC(): void {
-  if (typeof window !== 'undefined') {
-    window.location.hash = '#/voice-poc';
-  }
-}
-
 function AppContent() {
   const { matchId, setMatchId } = useMatch();
   const [activeTab, setActiveTabState] = useState<AppTab>(() =>

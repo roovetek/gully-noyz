@@ -115,7 +115,7 @@ export function MatchTimeline() {
   };
 
   const getHitSeconds = (clip: Pick<Clip, 'hit_timestamp_ms'>): number | null => {
-    if (clip.hit_timestamp_ms === null || clip.hit_timestamp_ms < 0) return null;
+    if (clip.hit_timestamp_ms == null || clip.hit_timestamp_ms < 0) return null;
     return clip.hit_timestamp_ms / 1000;
   };
 
@@ -302,7 +302,7 @@ export function MatchTimeline() {
                 )}
               </div>
 
-              {clip.hit_timestamp_ms !== null && (
+              {clip.hit_timestamp_ms != null && (
                 <div className="px-4 pt-3">
                   <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
                     <span>Bat-hit marker</span>
@@ -310,7 +310,7 @@ export function MatchTimeline() {
                       onClick={() => jumpToHit(clip.id, clip)}
                       className="text-cyan-300 hover:text-cyan-200 underline"
                     >
-                      Jump to hit ({(clip.hit_timestamp_ms / 1000).toFixed(2)}s)
+                      Jump to hit ({((clip.hit_timestamp_ms ?? 0) / 1000).toFixed(2)}s)
                     </button>
                   </div>
                   <div className="relative h-1.5 rounded bg-gray-700 overflow-hidden">
@@ -321,7 +321,7 @@ export function MatchTimeline() {
                           100,
                           Math.max(
                             0,
-                            ((clip.hit_timestamp_ms / 1000) / Math.max(clip.duration || 1, 0.1)) * 100
+                            (((clip.hit_timestamp_ms ?? 0) / 1000) / Math.max(clip.duration || 1, 0.1)) * 100
                           )
                         )}%`,
                       }}
