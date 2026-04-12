@@ -9,6 +9,13 @@ import { ConfigPage } from '../pages/ConfigPage';
 import { AdminPage } from '../pages/AdminPage';
 import type { CreateMatchOptions } from '../pages/types';
 
+const reusableMatchIds = new Map<string, string>();
+
+function extractMatchIdFromUrl(url: string): string | null {
+  const match = url.match(/#\/m\/([A-Z0-9]{6})\//i);
+  return match?.[1] ?? null;
+}
+
 type AppFixtures = {
   landingPage: LandingPage;
   createMatchModalPage: CreateMatchModalPage;
@@ -19,6 +26,9 @@ type AppFixtures = {
   configPage: ConfigPage;
   adminPage: AdminPage;
   createMatchFlow: (options: CreateMatchOptions) => Promise<void>;
+  openOrCreateReusableMatch: (
+    options: CreateMatchOptions & { cacheKey: string }
+  ) => Promise<string>;
 };
 
 export const test = base.extend<AppFixtures>({
@@ -51,6 +61,27 @@ export const test = base.extend<AppFixtures>({
       await landingPage.openCreateMatchModal();
       await createMatchModalPage.createMatch(options);
       await recordPage.expectLoaded();
+    });
+  },
+  openOrCreateReusableMatch: async ({ page, landingPage, createMatchFlow, recordPage }, use) => {
+    await use(async (options: CreateMatchOptions & { cacheKey: string }) => {
+      const cachedMatchId = reusableMatchIds.get(options.cacheKey);
+      if (cachedMatchId) {
+        await page.goto(`/#/m/${cachedMatchId}/record`);
+        await recordPage.expectLoaded();
+        return cachedMatchId;
+      }
+
+      await landingPage.goto();
+      await createMatchFlow(options);
+
+      const matchId = extractMatchIdFromUrl(page.url());
+      if (!matchId) {
+        throw new Error('Unable to determine match id after create flow');
+      }
+
+      reusableMatchIds.set(options.cacheKey, matchId);
+      return matchId;
     });
   },
 });

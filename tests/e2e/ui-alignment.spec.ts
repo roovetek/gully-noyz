@@ -2,14 +2,14 @@ import { expect, test } from './fixtures/test';
 
 test.describe('UI alignment regression', () => {
   test('record controls remain visible and non-overlapping', async ({
-    landingPage,
-    createMatchFlow,
+    openOrCreateReusableMatch,
     page,
   }) => {
-    await landingPage.goto();
-    await createMatchFlow({
-      name: 'UI Alignment Match',
+    await openOrCreateReusableMatch({
+      cacheKey: 'ui-alignment-shared-manual',
+      name: 'UI Alignment Shared Match',
       umpirePasscode: '1234',
+      voiceModeEnabled: false,
     });
 
     const inningsBadge = page.getByTestId('match-header-innings-1-label');
@@ -31,14 +31,13 @@ test.describe('UI alignment regression', () => {
   });
 
   test('manual outcome drawer opens fully with actionable controls', async ({
-    landingPage,
-    createMatchFlow,
+    openOrCreateReusableMatch,
     recordPage,
     page,
   }) => {
-    await landingPage.goto();
-    await createMatchFlow({
-      name: 'UI Drawer Alignment Match',
+    await openOrCreateReusableMatch({
+      cacheKey: 'ui-alignment-shared-manual',
+      name: 'UI Alignment Shared Match',
       umpirePasscode: '1234',
       voiceModeEnabled: false,
     });

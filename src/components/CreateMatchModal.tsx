@@ -11,6 +11,7 @@ import { MatchRules } from '../lib/types';
 import { logger } from '../lib/logger';
 import { userFriendlyMessage } from '../lib/userFriendlyError';
 import { setCaptureMode } from './CaptureModePicker';
+import { shouldShowTestData } from '../lib/testDataFilter';
 
 interface CreateMatchModalProps {
   onClose: () => void;
@@ -72,6 +73,7 @@ export function CreateMatchModal({ onClose, onMatchCreated }: CreateMatchModalPr
         match_id: newMatchId,
         name: matchName.trim(),
         is_public: !isPrivate,
+        is_test_data: shouldShowTestData(),
         total_overs: rules.overs_per_innings * 2,
         balls_per_over: rules.balls_per_over,
         current_innings: 1,

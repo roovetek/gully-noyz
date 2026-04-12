@@ -29,15 +29,14 @@ test.describe('Responsive layout suite', () => {
 
     test(`record layout remains usable at ${viewport.name}`, async ({
       page,
-      landingPage,
-      createMatchFlow,
+      openOrCreateReusableMatch,
       recordPage,
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
-      await landingPage.goto();
-      await createMatchFlow({
-        name: `Responsive Match ${viewport.name}`,
+      await openOrCreateReusableMatch({
+        cacheKey: 'responsive-record-layout-manual',
+        name: 'Responsive Layout Reuse Match',
         umpirePasscode: '1234',
         voiceModeEnabled: false,
       });

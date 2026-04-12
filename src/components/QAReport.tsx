@@ -18,6 +18,23 @@ type ScreenshotEntry = {
   checks: Array<{ label: string; pass: boolean }>;
 };
 
+type QARunManifestEntry = {
+  runId: string;
+  generatedAt: string;
+  allPassed: boolean;
+  commandCount: number;
+  passedCount: number;
+  durationMs: number;
+  reportPath?: string;
+};
+
+type QAManifest = {
+  generatedAt: string;
+  latestRunId: string;
+  maxPublicRuns: number;
+  runs: QARunManifestEntry[];
+};
+
 type QAReportData = {
   generatedAt: string;
   runId: string;
@@ -36,21 +53,47 @@ type QAReportData = {
 
 export function QAReport() {
   const [report, setReport] = useState<QAReportData | null>(null);
+  const [manifest, setManifest] = useState<QAManifest | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const fetchReport = async (reportPath: string) => {
+      const res = await fetch(reportPath, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error('QA report not found. Run `npm run qa:harness` first.');
+      }
+      return (await res.json()) as QAReportData;
+    };
+
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/qa/latest/report.json', { cache: 'no-store' });
-        if (!res.ok) {
-          throw new Error('QA report not found. Run `npm run qa:harness` first.');
+        const manifestRes = await fetch('/qa/manifest.json', { cache: 'no-store' });
+        if (manifestRes.ok) {
+          const manifestData = (await manifestRes.json()) as QAManifest;
+          if (Array.isArray(manifestData.runs) && manifestData.runs.length > 0) {
+            const initialRunId = manifestData.latestRunId || manifestData.runs[0].runId;
+            const selectedRun = manifestData.runs.find((run) => run.runId === initialRunId) || manifestData.runs[0];
+            const reportPath = selectedRun.reportPath ? `/qa/${selectedRun.reportPath}` : `/qa/runs/${selectedRun.runId}/report.json`;
+            const data = await fetchReport(reportPath);
+            if (!cancelled) {
+              setManifest(manifestData);
+              setSelectedRunId(selectedRun.runId);
+              setReport(data);
+            }
+            return;
+          }
         }
-        const data = (await res.json()) as QAReportData;
+
+        // Backward-compatible fallback if manifest is missing.
+        const data = await fetchReport('/qa/latest/report.json');
         if (!cancelled) {
+          setManifest(null);
+          setSelectedRunId(data.runId);
           setReport(data);
         }
       } catch (err) {
@@ -70,10 +113,56 @@ export function QAReport() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadSelectedRun = async () => {
+      if (!manifest || !selectedRunId) return;
+      if (report?.runId === selectedRunId) return;
+      const run = manifest.runs.find((item) => item.runId === selectedRunId);
+      if (!run) return;
+
+      setLoading(true);
+      setError(null);
+      try {
+        const reportPath = run.reportPath ? `/qa/${run.reportPath}` : `/qa/runs/${run.runId}/report.json`;
+        const res = await fetch(reportPath, { cache: 'no-store' });
+        if (!res.ok) {
+          throw new Error(`Selected run report unavailable: ${selectedRunId}`);
+        }
+        const data = (await res.json()) as QAReportData;
+        if (!cancelled) {
+          setReport(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Failed to load selected run';
+          setError(message);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadSelectedRun();
+    return () => {
+      cancelled = true;
+    };
+  }, [manifest, report?.runId, selectedRunId]);
+
   const passedCount = useMemo(() => {
     if (!report) return 0;
     return report.commands.filter((c) => c.exitCode === 0).length;
   }, [report]);
+
+  const screenshotBase = useMemo(() => {
+    if (!report) return '/qa/latest/';
+    if (manifest && selectedRunId) {
+      return `/qa/runs/${selectedRunId}/`;
+    }
+    return '/qa/latest/';
+  }, [manifest, report, selectedRunId]);
 
   if (loading) {
     return (
@@ -115,6 +204,43 @@ export function QAReport() {
             {passedCount}/{report.commands.length} command checks passed
           </p>
         </div>
+
+        {manifest && manifest.runs.length > 0 && (
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <h2 className="text-lg font-bold text-cyan-200 mb-3">Run History</h2>
+            <p className="text-xs text-gray-400 mb-3">
+              Showing {manifest.runs.length} recent runs (max {manifest.maxPublicRuns}).
+            </p>
+            <div className="space-y-2 max-h-64 overflow-auto pr-1">
+              {manifest.runs.map((run) => {
+                const active = run.runId === selectedRunId;
+                return (
+                  <button
+                    key={run.runId}
+                    type="button"
+                    onClick={() => setSelectedRunId(run.runId)}
+                    className={`w-full text-left border rounded p-3 transition-colors ${
+                      active
+                        ? 'border-cyan-500 bg-cyan-500/10'
+                        : 'border-gray-700 bg-gray-800/70 hover:bg-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-gray-100">{run.runId}</span>
+                      <span className={run.allPassed ? 'text-green-400 text-xs' : 'text-amber-300 text-xs'}>
+                        {run.allPassed ? 'PASS' : 'WARN'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(run.generatedAt).toLocaleString()} | {(run.durationMs / 1000).toFixed(1)}s | {run.passedCount}/
+                      {run.commandCount} commands
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
           <h2 className="text-lg font-bold text-indigo-300 mb-3">Visual Analysis Summary</h2>
@@ -159,7 +285,7 @@ export function QAReport() {
             {report.screenshots.map((shot, idx) => (
               <div key={shot.file} className="bg-gray-800/70 border border-gray-700 rounded-lg overflow-hidden">
                 <img
-                  src={`/qa/latest/${shot.file}`}
+                  src={`${screenshotBase}${shot.file}`}
                   alt={shot.title}
                   className="w-full h-auto bg-black"
                   loading="lazy"

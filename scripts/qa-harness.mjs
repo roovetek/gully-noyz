@@ -9,6 +9,11 @@ const runId = `qa-harness-${timestamp}`;
 const runDir = path.join(root, 'runs', runId);
 const logsDir = path.join(runDir, 'logs');
 const shotsDir = path.join(runDir, 'screenshots');
+const publicQaDir = path.join(root, 'public', 'qa');
+const publicRunsDir = path.join(publicQaDir, 'runs');
+const publicLatestDir = path.join(publicQaDir, 'latest');
+const publicManifestPath = path.join(publicQaDir, 'manifest.json');
+const maxPublicRuns = Math.max(1, Number.parseInt(process.env.QA_MAX_PUBLIC_RUNS || '20', 10) || 20);
 
 fs.mkdirSync(logsDir, { recursive: true });
 fs.mkdirSync(shotsDir, { recursive: true });
@@ -19,6 +24,7 @@ const env = {
   VITE_SUPABASE_ANON_KEY:
     process.env.VITE_SUPABASE_ANON_KEY ||
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+  VITE_TEST_MODE: process.env.VITE_TEST_MODE || 'true',
   TEST_MODE: 'true',
 };
 
@@ -53,6 +59,70 @@ function runCommand(name, command, args, extraEnv = {}, timeoutMs = 300000) {
     logFile: path.relative(root, logFile),
     signal: result.signal ?? null,
   };
+}
+
+function safeReadJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function updatePublicArtifacts(report, reportJsonPath, reportHtmlPath) {
+  fs.mkdirSync(publicRunsDir, { recursive: true });
+
+  const publicRunDir = path.join(publicRunsDir, runId);
+  fs.rmSync(publicRunDir, { recursive: true, force: true });
+  fs.mkdirSync(publicRunDir, { recursive: true });
+  fs.cpSync(path.join(runDir, 'screenshots'), path.join(publicRunDir, 'screenshots'), { recursive: true });
+  fs.copyFileSync(reportJsonPath, path.join(publicRunDir, 'report.json'));
+  fs.copyFileSync(reportHtmlPath, path.join(publicRunDir, 'report.html'));
+
+  // Keep backward compatibility for consumers that only read /qa/latest.
+  fs.rmSync(publicLatestDir, { recursive: true, force: true });
+  fs.mkdirSync(publicLatestDir, { recursive: true });
+  fs.cpSync(path.join(publicRunDir, 'screenshots'), path.join(publicLatestDir, 'screenshots'), { recursive: true });
+  fs.copyFileSync(path.join(publicRunDir, 'report.json'), path.join(publicLatestDir, 'report.json'));
+  fs.copyFileSync(path.join(publicRunDir, 'report.html'), path.join(publicLatestDir, 'report.html'));
+
+  const currentManifest = safeReadJson(publicManifestPath);
+  const previousRuns = Array.isArray(currentManifest?.runs) ? currentManifest.runs : [];
+  const nextRun = {
+    runId,
+    generatedAt: report.generatedAt,
+    allPassed: Boolean(report.summary?.allPassed),
+    commandCount: Array.isArray(report.commands) ? report.commands.length : 0,
+    passedCount: Array.isArray(report.commands)
+      ? report.commands.filter((cmd) => cmd.exitCode === 0).length
+      : 0,
+    durationMs: Array.isArray(report.commands)
+      ? report.commands.reduce((sum, cmd) => sum + (Number(cmd.durationMs) || 0), 0)
+      : 0,
+    reportPath: `runs/${runId}/report.json`,
+    htmlPath: `runs/${runId}/report.html`,
+  };
+
+  const dedupedRuns = [nextRun, ...previousRuns.filter((run) => run?.runId !== runId)];
+  dedupedRuns.sort((a, b) => new Date(b.generatedAt || 0).getTime() - new Date(a.generatedAt || 0).getTime());
+  const keptRuns = dedupedRuns.slice(0, maxPublicRuns);
+
+  const keepSet = new Set(keptRuns.map((run) => run.runId));
+  const existingRunDirs = fs.existsSync(publicRunsDir) ? fs.readdirSync(publicRunsDir, { withFileTypes: true }) : [];
+  for (const dir of existingRunDirs) {
+    if (!dir.isDirectory()) continue;
+    if (!keepSet.has(dir.name)) {
+      fs.rmSync(path.join(publicRunsDir, dir.name), { recursive: true, force: true });
+    }
+  }
+
+  const manifest = {
+    generatedAt: new Date().toISOString(),
+    latestRunId: runId,
+    maxPublicRuns,
+    runs: keptRuns,
+  };
+  fs.writeFileSync(publicManifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 }
 
 async function waitForServer(url, timeoutMs = 30000) {
@@ -331,12 +401,7 @@ async function main() {
   fs.writeFileSync(reportJson, JSON.stringify(report, null, 2), 'utf-8');
   fs.writeFileSync(reportHtml, buildHtml(report), 'utf-8');
 
-  const publicLatest = path.join(root, 'public', 'qa', 'latest');
-  fs.rmSync(publicLatest, { recursive: true, force: true });
-  fs.mkdirSync(publicLatest, { recursive: true });
-  fs.cpSync(path.join(runDir, 'screenshots'), path.join(publicLatest, 'screenshots'), { recursive: true });
-  fs.copyFileSync(reportJson, path.join(publicLatest, 'report.json'));
-  fs.copyFileSync(reportHtml, path.join(publicLatest, 'report.html'));
+  updatePublicArtifacts(report, reportJson, reportHtml);
 
   // Keep a simple pointer to the latest run folder for local discovery.
   fs.writeFileSync(path.join(root, 'runs', 'qa-latest.txt'), `${runId}\n`, 'utf-8');

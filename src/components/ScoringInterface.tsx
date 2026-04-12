@@ -14,6 +14,7 @@ import { useMatchEngine } from '../hooks/useMatchEngine';
 import { deliveryPayloadToClipInsert } from '../engine/adapters';
 import { ExtraType, WicketType, type DeliverBallActionPayload } from '../engine/types';
 import { uploadClipBlob } from '../lib/clipStorage';
+import { shouldShowTestData } from '../lib/testDataFilter';
 
 export interface ScoringInterfaceProps {
   onDelivered?: (outcome: VoiceDeliveryOutcome) => Promise<void>;
@@ -149,6 +150,7 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
         action: 'insert',
         payload: {
           ...clipInsert,
+          is_test_data: shouldShowTestData(),
           video_url: videoUrl,
           duration: capturedVideo ? Math.round(capturedVideo.durationMs / 1000) : 0,
           trim_start_ms: null,
@@ -161,6 +163,7 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
         execute: async () =>
           supabase.from('clips').insert({
             ...clipInsert,
+            is_test_data: shouldShowTestData(),
             video_url: videoUrl,
             duration: capturedVideo ? Math.round(capturedVideo.durationMs / 1000) : 0,
             trim_start_ms: null,

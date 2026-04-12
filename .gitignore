@@ -12,6 +12,7 @@ dist-ssr
 *.local
 
 .pw-browsers
+playwright-report/
 playwright-report/data
 .vscode/*
 !.vscode/extensions.json
@@ -58,3 +59,10 @@ node_modules/
 
 # Cache files
 /cache/
+
+# Local QA harness artifacts (keep local, never commit)
+/public/qa/latest/
+/public/qa/runs/
+/public/qa/manifest.json
+/runs/qa-harness-*/
+/runs/qa-latest.txt

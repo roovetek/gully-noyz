@@ -24,6 +24,7 @@ import { writeAIDecisionTrace } from '../lib/aiDecisionTrace';
 import { userFriendlyMessage } from '../lib/userFriendlyError';
 import { ERROR_MESSAGES } from '../lib/constants';
 import { uploadClipBlob } from '../lib/clipStorage';
+import { shouldShowTestData } from '../lib/testDataFilter';
 
 interface RecordingData {
   blob: Blob;
@@ -690,6 +691,7 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
         action: 'insert',
         payload: {
           match_id: matchId,
+          is_test_data: shouldShowTestData(),
           innings_number: currentInnings,
           over_number: overNumber,
           ball_number: confirmBallNumber,
@@ -710,6 +712,7 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
         execute: async () =>
           supabase.from('clips').insert({
             match_id: matchId,
+            is_test_data: shouldShowTestData(),
             innings_number: currentInnings,
             over_number: overNumber,
             ball_number: confirmBallNumber,

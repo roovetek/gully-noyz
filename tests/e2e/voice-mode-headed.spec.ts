@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures/test';
+import { maybePauseForObservation, maybeSleepForObservation } from './helpers/observation';
 
 test.describe('Voice mode UI flow', () => {
   test('creates match with voice mode enabled by default', async ({
@@ -8,10 +9,12 @@ test.describe('Voice mode UI flow', () => {
     recordPage,
   }) => {
     await landingPage.goto();
+    await maybeSleepForObservation(page, 'Landing loaded before match creation');
     await createMatchFlow({
       name: 'Voice Mode Default On',
       umpirePasscode: '1234',
     });
+    await maybePauseForObservation(page, 'Created match and entered record tab');
 
     await recordPage.expectLoaded();
     await expect(page.getByTestId('capture-mode-picker')).toBeVisible();
@@ -27,6 +30,7 @@ test.describe('Voice mode UI flow', () => {
     createMatchFlow,
   }) => {
     await landingPage.goto();
+    await maybeSleepForObservation(page, 'Landing loaded for explicit-off flow');
     await createMatchFlow({
       name: 'Voice Mode Explicit Off',
       umpirePasscode: '1234',
@@ -38,7 +42,7 @@ test.describe('Voice mode UI flow', () => {
       .toBe('manual');
 
     await expect(page.getByTestId('ai-assist-mode-select')).toBeVisible();
-  await expect(page.getByTestId('capture-mode-picker')).toBeVisible();
+    await expect(page.getByTestId('capture-mode-picker')).toBeVisible();
 
     // CaptureModePicker is always visible — switch back to voice
     const voiceChip = page.getByTestId('capture-mode-voice');
