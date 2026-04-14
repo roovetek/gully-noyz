@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, lazy, Suspense } from 'react';
 import { MatchProvider, useMatch } from './context/MatchContext';
 import { MatchClipsProvider } from './context/MatchClipsContext';
 import { SecureStorage } from './lib/security';
@@ -17,6 +17,12 @@ import { Footer } from './components/Footer';
 import { GullyRulz } from './components/AppInfo';
 import { QAReport } from './components/QAReport';
 import { VoicePoC } from './components/VoicePoC';
+import { CricketAnalysis } from './components/videoAnalysis/CricketAnalysis';
+
+const CricketAnalysisBrowser = lazy(async () => {
+  const m = await import('./components/videoAnalysis/CricketAnalysisBrowser');
+  return { default: m.CricketAnalysisBrowser };
+});
 
 function isQaReportRouteEnabled(): boolean {
   return Boolean(import.meta.env.DEV || import.meta.env.VITE_ENABLE_QA_REPORT === 'true');
@@ -56,6 +62,14 @@ function AppContent() {
     setActiveTab('gullyRulz');
   };
 
+  const handleOpenVideoAnalysis = () => {
+    setActiveTab('videoAnalysis');
+  };
+
+  const handleOpenVideoAnalysisBrowser = () => {
+    setActiveTab('videoAnalysisBrowser');
+  };
+
   useLayoutEffect(() => {
     if (didInitFromHash.current) return;
     didInitFromHash.current = true;
@@ -66,6 +80,14 @@ function AppContent() {
     }
     if (p.kind === 'gullyRulz') {
       setActiveTabState('gullyRulz');
+      return;
+    }
+    if (p.kind === 'videoAnalysis') {
+      setActiveTabState('videoAnalysis');
+      return;
+    }
+    if (p.kind === 'videoAnalysisBrowser') {
+      setActiveTabState('videoAnalysisBrowser');
       return;
     }
     if (p.kind === 'voicePoC') {
@@ -105,7 +127,12 @@ function AppContent() {
         /* ignore */
       }
       setActiveTabState((prev) =>
-        prev === 'gullyRulz' || prev === 'admin' ? prev : 'record'
+        prev === 'gullyRulz' ||
+        prev === 'videoAnalysis' ||
+        prev === 'videoAnalysisBrowser' ||
+        prev === 'admin'
+          ? prev
+          : 'record'
       );
     }
     prevMatchId.current = matchId;
@@ -131,6 +158,14 @@ function AppContent() {
       }
       if (p.kind === 'gullyRulz') {
         setActiveTabState('gullyRulz');
+        return;
+      }
+      if (p.kind === 'videoAnalysis') {
+        setActiveTabState('videoAnalysis');
+        return;
+      }
+      if (p.kind === 'videoAnalysisBrowser') {
+        setActiveTabState('videoAnalysisBrowser');
         return;
       }
       if (p.kind === 'voicePoC') {
@@ -166,6 +201,8 @@ function AppContent() {
   const navHighlight: NavHighlight = useMemo(() => {
     if (activeTab === 'admin') return 'admin';
     if (activeTab === 'gullyRulz') return 'gullyRulz';
+    if (activeTab === 'videoAnalysisBrowser') return 'videoAnalysisBrowser';
+    if (activeTab === 'videoAnalysis') return 'videoAnalysis';
     if (activeTab === 'qa') return 'none';
     if (!matchId) return 'home';
     if (activeTab === 'record') return 'home';
@@ -182,6 +219,8 @@ function AppContent() {
         highlight={navHighlight}
         onHome={handleGoHome}
         onOpenGullyRulz={handleOpenGullyRulz}
+        onOpenVideoAnalysis={handleOpenVideoAnalysis}
+        onOpenVideoAnalysisBrowser={handleOpenVideoAnalysisBrowser}
       />
       <SessionIndicator />
       <div className="pt-16 flex-1 flex flex-col min-h-0">
@@ -191,10 +230,26 @@ function AppContent() {
           <QAReport />
         ) : activeTab === 'gullyRulz' ? (
           <GullyRulz />
+        ) : activeTab === 'videoAnalysis' ? (
+          <CricketAnalysis onOpenBrowserLab={handleOpenVideoAnalysisBrowser} />
+        ) : activeTab === 'videoAnalysisBrowser' ? (
+          <Suspense
+            fallback={
+              <div className="flex flex-1 items-center justify-center pt-16 text-slate-400 text-sm">
+                Loading browser pose tools…
+              </div>
+            }
+          >
+            <CricketAnalysisBrowser onOpenServerAnalysis={handleOpenVideoAnalysis} />
+          </Suspense>
         ) : activeTab === 'voicePoC' ? (
           <VoicePoC />
         ) : !matchId ? (
-          <MatchSelector />
+          <MatchSelector
+            onOpenGullyRulz={handleOpenGullyRulz}
+            onOpenVideoAnalysis={handleOpenVideoAnalysis}
+            onOpenVideoAnalysisBrowser={handleOpenVideoAnalysisBrowser}
+          />
         ) : (
           <>
             {activeTab === 'record' && <Record />}
@@ -204,7 +259,12 @@ function AppContent() {
           </>
         )}
       </div>
-      {activeTab !== 'admin' && activeTab !== 'gullyRulz' && activeTab !== 'qa' && activeTab !== 'voicePoC' && (
+      {activeTab !== 'admin' &&
+        activeTab !== 'gullyRulz' &&
+        activeTab !== 'videoAnalysis' &&
+        activeTab !== 'videoAnalysisBrowser' &&
+        activeTab !== 'qa' &&
+        activeTab !== 'voicePoC' && (
         <BottomNav matchId={matchId} activeTab={activeTab} onTabChange={setActiveTab} />
       )}
       {!recordFillsViewport && <Footer />}

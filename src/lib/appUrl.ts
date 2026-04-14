@@ -1,11 +1,20 @@
 /** Hash-based app locations (no server rewrite needed). */
 
 export type MainTab = 'record' | 'timeline' | 'stats' | 'info';
-export type AppTab = MainTab | 'gullyRulz' | 'admin' | 'qa' | 'voicePoC';
+export type AppTab =
+  | MainTab
+  | 'gullyRulz'
+  | 'videoAnalysis'
+  | 'videoAnalysisBrowser'
+  | 'admin'
+  | 'qa'
+  | 'voicePoC';
 
 export function hashFromAppState(matchId: string | null, activeTab: AppTab): string {
   if (activeTab === 'admin') return '#/admin';
   if (activeTab === 'gullyRulz') return '#/gully-rulz';
+  if (activeTab === 'videoAnalysisBrowser') return '#/video-analysis-browser';
+  if (activeTab === 'videoAnalysis') return '#/video-analysis';
   if (activeTab === 'qa') return '#/qa';
   if (activeTab === 'voicePoC') return '#/voice-poc';
   if (!matchId) return '#/';
@@ -20,6 +29,8 @@ export type ParsedHash =
   | { kind: 'admin' }
   | { kind: 'qa' }
   | { kind: 'gullyRulz' }
+  | { kind: 'videoAnalysis' }
+  | { kind: 'videoAnalysisBrowser' }
   | { kind: 'voicePoC' }
   | { kind: 'match'; matchId: string; tab: MainTab };
 
@@ -33,6 +44,8 @@ export function parseAppHash(): ParsedHash {
   if (segments[0] === 'admin') return { kind: 'admin' };
   if (segments[0] === 'qa') return { kind: 'qa' };
   if (segments[0] === 'gully-rulz') return { kind: 'gullyRulz' };
+  if (segments[0] === 'video-analysis-browser') return { kind: 'videoAnalysisBrowser' };
+  if (segments[0] === 'video-analysis') return { kind: 'videoAnalysis' };
   if (segments[0] === 'voice-poc') return { kind: 'voicePoC' };
 
   if (segments[0] === 'm' && segments[1]) {

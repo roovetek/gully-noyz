@@ -1,5 +1,6 @@
-"""
-Cricket Vision API: YOLO pose + ball detect, rules engine, Ollama narrative, WebSocket telemetry.
+"""Cricket Vision API entrypoint.
+
+Exposes video upload sessions and websocket telemetry streaming.
 """
 
 from __future__ import annotations
@@ -14,13 +15,8 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-import logging
-
 from processing import SessionManager
 from vision.pipeline import VisionPipeline
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 ALLOWED_VIDEO = frozenset({".mp4", ".webm", ".mov", ".mkv", ".avi"})
 
@@ -44,21 +40,17 @@ def _cors_origins() -> list[str]:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     global _pipeline
-    logger.info("Loading vision pipeline (YOLO weights may download on first run)...")
     _pipeline = VisionPipeline()
     manager.attach_pipeline(_pipeline)
-    yield
-    _app_pipeline_cleanup(_pipeline)
-
-async def _app_pipeline_cleanup(pipeline: VisionPipeline):
-    global _pipeline
-    _pipeline = None
-    logger.info("Vision pipeline cleaned up.")
+    try:
+        yield
+    finally:
+        _pipeline = None
 
 
-app = FastAPI(title="Cricket Vision API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Cricket Vision API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,12 +78,15 @@ async def _save_upload(upload: UploadFile) -> str:
     max_b = _max_upload_bytes()
     await upload.seek(0)
     suf = Path(upload.filename or "video.mp4").suffix.lower()
+
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suf)
     path = tmp.name
     tmp.close()
+
     try:
         with open(path, "wb") as out:
             shutil.copyfileobj(upload.file, out)
+
         size = os.path.getsize(path)
         if size == 0:
             raise HTTPException(status_code=400, detail="Empty file")
@@ -107,51 +102,58 @@ async def _save_upload(upload: UploadFile) -> str:
             pass
         raise
     except Exception as e:
-        logger.error(f"Upload error: {e}")
         try:
             os.unlink(path)
         except OSError:
             pass
-        raise HTTPException(status_code=500, detail="Internal server error during upload")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}") from e
+
     return path
 
-
-@app.get("/sessions")
-async def list_sessions() -> list[str]:
-    return list(manager.sessions.keys())
-
-@app.get("/sessions/{session_id}")
-async def get_session_info(session_id: str) -> dict[str, Any]:
-    session = manager.sessions.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": session_id, "video_path": session.video_path}
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/upload")
-async def upload_video(file: UploadFile = File(...)) -> dict[str, str]:
+@app.post("/sessions")
+async def create_session(file: UploadFile = File(...)) -> dict[str, Any]:
     path = await _save_upload(file)
-    session_id = manager.create_session(path)
-    return {"session_id": session_id, "video_path": path}
+    sess = await manager.create_session(path)
 
-@app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    await manager.connect_websocket(websocket, session_id)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        await manager.disconnect_websocket(session_id)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await manager.disconnect_websocket(session_id)
+    ws_path = f"/ws/stream/{sess.id}"
+    ws_base = os.environ.get("CRICKET_PUBLIC_WS_BASE", "").strip().rstrip("/")
+    websocket_url = f"{ws_base}{ws_path}" if ws_base else None
+
+    return {
+        "session_id": sess.id,
+        "ws_path": ws_path,
+        "websocket_url": websocket_url,
+    }
+
+
+# Backward compatibility for frontend variants that post to /upload.
+@app.post("/upload")
+async def upload_alias(file: UploadFile = File(...)) -> dict[str, str]:
+    data = await create_session(file)
+    return {"session_id": str(data["session_id"]) }
+
+
+@app.get("/sessions/{session_id}")
+async def get_session(session_id: str) -> dict[str, str]:
+    sess = await manager.get(session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"session_id": sess.id, "video_path": sess.video_path}
+
+
+async def _stream_loop(websocket: WebSocket, session_id: str) -> None:
+    await websocket.accept()
+    sess = await manager.subscribe_ws(session_id, websocket)
     if not sess:
         await websocket.close(code=4004)
         return
+
     try:
         while True:
             await websocket.receive_text()
@@ -159,3 +161,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         pass
     finally:
         await manager.unsubscribe_ws(session_id, websocket)
+
+
+@app.websocket("/ws/stream/{session_id}")
+async def stream_websocket(websocket: WebSocket, session_id: str) -> None:
+    await _stream_loop(websocket, session_id)
+
+
+# Backward compatibility for clients using /ws/{session_id}.
+@app.websocket("/ws/{session_id}")
+async def stream_websocket_alias(websocket: WebSocket, session_id: str) -> None:
+    await _stream_loop(websocket, session_id)

@@ -3,10 +3,13 @@ import { hashFromAppState, parseAppHash } from '../../src/lib/appUrl';
 
 describe('appUrl', () => {
   describe('hashFromAppState', () => {
-    it('returns non-match routes for admin, qa and gully-rulz', () => {
+    it('returns non-match routes for admin, qa, gully-rulz and video analysis routes', () => {
       expect(hashFromAppState(null, 'admin')).toBe('#/admin');
       expect(hashFromAppState(null, 'qa')).toBe('#/qa');
       expect(hashFromAppState(null, 'gullyRulz')).toBe('#/gully-rulz');
+      expect(hashFromAppState(null, 'videoAnalysis')).toBe('#/video-analysis');
+      expect(hashFromAppState(null, 'videoAnalysisBrowser')).toBe('#/video-analysis-browser');
+      expect(hashFromAppState('ABC123', 'videoAnalysisBrowser')).toBe('#/video-analysis-browser');
     });
 
     it('returns landing when there is no match id', () => {
@@ -37,6 +40,12 @@ describe('appUrl', () => {
 
       window.location.hash = '#/gully-rulz';
       expect(parseAppHash()).toEqual({ kind: 'gullyRulz' });
+
+      window.location.hash = '#/video-analysis';
+      expect(parseAppHash()).toEqual({ kind: 'videoAnalysis' });
+
+      window.location.hash = '#/video-analysis-browser';
+      expect(parseAppHash()).toEqual({ kind: 'videoAnalysisBrowser' });
     });
 
     it('parses valid match tabs and normalizes case', () => {

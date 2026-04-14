@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMatch } from '../context/MatchContext';
-import { Plus, LogIn, List } from 'lucide-react';
+import { Plus, LogIn, List, Video, Cpu } from 'lucide-react';
 import { MatchList } from './MatchList';
 import { CreateMatchModal } from './CreateMatchModal';
 import { SecretPrompt } from './SecretPrompt';
@@ -11,9 +11,15 @@ import { STORAGE_KEYS, ERROR_MESSAGES } from '../lib/constants';
 
 interface MatchSelectorProps {
   onOpenGullyRulz?: () => void;
+  onOpenVideoAnalysis?: () => void;
+  onOpenVideoAnalysisBrowser?: () => void;
 }
 
-export function MatchSelector({ onOpenGullyRulz }: MatchSelectorProps) {
+export function MatchSelector({
+  onOpenGullyRulz,
+  onOpenVideoAnalysis,
+  onOpenVideoAnalysisBrowser,
+}: MatchSelectorProps) {
   const { setMatchId, setMatchName } = useMatch();
   const [joinId, setJoinId] = useState('');
   const [error, setError] = useState('');
@@ -221,6 +227,26 @@ export function MatchSelector({ onOpenGullyRulz }: MatchSelectorProps) {
             <List size={24} />
             <span className="text-lg">Browse All Matches</span>
           </button>
+
+          {onOpenVideoAnalysis && (
+            <button
+              onClick={onOpenVideoAnalysis}
+              className="w-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors border border-rose-400"
+            >
+              <Video size={24} />
+              <span className="text-lg">Video Analysis</span>
+            </button>
+          )}
+
+          {onOpenVideoAnalysisBrowser && (
+            <button
+              onClick={onOpenVideoAnalysisBrowser}
+              className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-3 transition-colors border border-amber-400"
+            >
+              <Cpu size={24} />
+              <span className="text-lg">Browser pose lab</span>
+            </button>
+          )}
 
           {onOpenGullyRulz && (
             <div className="text-center pt-2">
