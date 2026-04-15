@@ -49,33 +49,32 @@ function seekVideo(video: HTMLVideoElement, timeSec: number): Promise<void> {
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null;
 
+/**
+ * IMAGE mode: each frame is independent. VIDEO mode keeps graph timestamp state and
+ * requires monotonically increasing timestamps for the lifetime of the instance — a
+ * second scan (or new clip) that restarts near 0 triggers "Packet timestamp mismatch".
+ */
 async function getPoseLandmarker(): Promise<PoseLandmarker> {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
       const wasm = await FilesetResolver.forVisionTasks(WASM_CDN);
+      const options = {
+        baseOptions: {
+          modelAssetPath: MODEL_URL,
+          delegate: 'GPU' as const,
+        },
+        runningMode: 'IMAGE' as const,
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.4,
+        minPosePresenceConfidence: 0.4,
+        minTrackingConfidence: 0.4,
+      };
       try {
-        return await PoseLandmarker.createFromOptions(wasm, {
-          baseOptions: {
-            modelAssetPath: MODEL_URL,
-            delegate: 'GPU',
-          },
-          runningMode: 'VIDEO',
-          numPoses: 1,
-          minPoseDetectionConfidence: 0.4,
-          minPosePresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4,
-        });
+        return await PoseLandmarker.createFromOptions(wasm, options);
       } catch {
         return PoseLandmarker.createFromOptions(wasm, {
-          baseOptions: {
-            modelAssetPath: MODEL_URL,
-            delegate: 'CPU',
-          },
-          runningMode: 'VIDEO',
-          numPoses: 1,
-          minPoseDetectionConfidence: 0.4,
-          minPosePresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4,
+          ...options,
+          baseOptions: { ...options.baseOptions, delegate: 'CPU' },
         });
       }
     })();
@@ -117,14 +116,11 @@ export async function runBrowserPoseScan(params: RunBrowserPoseScanParams): Prom
     times.push(duration - 1e-3);
   }
 
-  let lastTs = -1;
   for (let i = 0; i < times.length; i += 1) {
     const t = times[i];
     await seekVideo(video, t);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const timestampMs = Math.max(lastTs + 1, Math.round(t * 1000));
-    lastTs = timestampMs;
-    const result = landmarker.detectForVideo(canvas, timestampMs);
+    const result = landmarker.detect(canvas);
     const keypointsNorm = mediapipeLandmarksToSkeleton(result.landmarks);
     frames.push({ timeSec: t, keypointsNorm });
     onProgress?.((i + 1) / times.length);
