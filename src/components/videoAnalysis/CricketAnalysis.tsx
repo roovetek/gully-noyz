@@ -14,9 +14,11 @@ import {
 import { useMatch } from '../../context/MatchContext';
 import { useCricketVisionStream } from '../../hooks/cricket/useCricketVisionStream';
 import { VideoOverlay } from './VideoOverlay';
+import { VideoProcessingControls } from './VideoProcessingControls';
 import { ReasoningFeed } from './ReasoningFeed';
 import { BallTimeline } from './BallTimeline';
 import { ScorePanel } from './ScorePanel';
+import { createConfigFromMode, type AdvancedOverlayConfig } from '../../types/videoConfig';
 import type {
   AnalysisDelivery,
   BoundingBox,
@@ -85,10 +87,14 @@ export function CricketAnalysis({ onOpenBrowserLab }: CricketAnalysisProps) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [videoSize, setVideoSize] = useState({ width: 640, height: 360 });
+  const [videoPixelSize, setVideoPixelSize] = useState({ w: 0, h: 0 });
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [localStreamKey, setLocalStreamKey] = useState(0);
   const [overlayMode, setOverlayMode] = useState<'simplified' | 'advanced'>('simplified');
+  const [advancedOverlay, setAdvancedOverlay] = useState<AdvancedOverlayConfig>(() =>
+    createConfigFromMode('mixed')
+  );
 
   const [deliveries, setDeliveries] = useState<AnalysisDelivery[]>([]);
   const [reasoningFeed, setReasoningFeed] = useState<ReasoningEntry[]>([]);
@@ -395,7 +401,13 @@ export function CricketAnalysis({ onOpenBrowserLab }: CricketAnalysisProps) {
                   muted={isMuted}
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={() => {
-                    if (videoRef.current) setDuration(videoRef.current.duration);
+                    if (videoRef.current) {
+                      setDuration(videoRef.current.duration);
+                      setVideoPixelSize({
+                        w: videoRef.current.videoWidth,
+                        h: videoRef.current.videoHeight,
+                      });
+                    }
                   }}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
@@ -429,6 +441,9 @@ export function CricketAnalysis({ onOpenBrowserLab }: CricketAnalysisProps) {
                 width={videoSize.width}
                 height={videoSize.height}
                 mode={overlayMode}
+                advancedOverlay={advancedOverlay}
+                videoWidth={videoPixelSize.w}
+                videoHeight={videoPixelSize.h}
               />
 
               {isAnalyzing && (
@@ -575,8 +590,15 @@ export function CricketAnalysis({ onOpenBrowserLab }: CricketAnalysisProps) {
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-4 flex flex-col h-[520px] xl:h-full min-h-[500px]">
-          <ReasoningFeed entries={reasoningFeed} isAnalyzing={isAnalyzing} />
+        <div className="flex flex-col gap-4 xl:h-full">
+          <VideoProcessingControls
+            value={advancedOverlay}
+            onChange={setAdvancedOverlay}
+            title="Video Processing Controls"
+          />
+          <div className="glass-panel rounded-2xl p-4 flex flex-col h-[520px] xl:h-full min-h-[500px]">
+            <ReasoningFeed entries={reasoningFeed} isAnalyzing={isAnalyzing} />
+          </div>
         </div>
       </div>
     </div>

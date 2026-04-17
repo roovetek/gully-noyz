@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.openwebui.serve</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/Dhruvs-MacBook-Pro/.local/bin/uvx</string>
+        <string>--python</string>
+        <string>3.11</string>
+        <string>open-webui@latest</string>
+        <string>serve</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DATA_DIR</key>
+        <string>/Users/Dhruvs-MacBook-Pro/.open-webui</string>
+        <key>OLLAMA_BASE_URL</key>
+        <string>http://localhost:11434</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/openwebui.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/openwebui.err.log</string>
+</dict>
+</plist>

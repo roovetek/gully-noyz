@@ -6,6 +6,17 @@ const WASM_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/w
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
+export const BROWSER_POSE_SCAN_DEFAULTS = {
+  stepSec: 0.12,
+  maxProcessWidth: 480,
+  runningMode: 'IMAGE',
+  numPoses: 1,
+  minPoseDetectionConfidence: 0.4,
+  minPosePresenceConfidence: 0.4,
+  minTrackingConfidence: 0.4,
+  modelVariant: 'pose_landmarker_lite',
+} as const;
+
 export interface BrowserPoseFrame {
   /** Media time in seconds. */
   timeSec: number;
@@ -87,7 +98,13 @@ async function getPoseLandmarker(): Promise<PoseLandmarker> {
  * Restores `video.currentTime` after completion. Pauses playback if needed.
  */
 export async function runBrowserPoseScan(params: RunBrowserPoseScanParams): Promise<BrowserPoseFrame[]> {
-  const { video, canvas, stepSec = 0.1, maxProcessWidth = 480, onProgress } = params;
+  const {
+    video,
+    canvas,
+    stepSec = BROWSER_POSE_SCAN_DEFAULTS.stepSec,
+    maxProcessWidth = BROWSER_POSE_SCAN_DEFAULTS.maxProcessWidth,
+    onProgress,
+  } = params;
 
   if (!video.videoWidth || !video.duration || Number.isNaN(video.duration)) {
     throw new Error('Video metadata not loaded');

@@ -10,9 +10,15 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { VideoOverlay } from './VideoOverlay';
+import { VideoProcessingControls } from './VideoProcessingControls';
 import { ReasoningFeed } from './ReasoningFeed';
 import type { ReasoningEntry, SkeletonKeypoint, TrajectoryPoint } from './types';
-import { runBrowserPoseScan, type BrowserPoseFrame } from './browserPose/runBrowserPoseScan';
+import { createConfigFromMode, type AdvancedOverlayConfig } from '../../types/videoConfig';
+import {
+  BROWSER_POSE_SCAN_DEFAULTS,
+  runBrowserPoseScan,
+  type BrowserPoseFrame,
+} from './browserPose/runBrowserPoseScan';
 import { mapSkeletonToDisplay, normalizedToContainerPx } from './browserPose/videoContainMapping';
 import {
   compareToPreset,
@@ -69,6 +75,9 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
   const [role, setRole] = useState<AnalysisRole>('batting');
   const [handedness, setHandedness] = useState<'right' | 'left'>('right');
   const [presetId, setPresetId] = useState<string>(STYLE_PRESETS[0].id);
+  const [advancedOverlay, setAdvancedOverlay] = useState<AdvancedOverlayConfig>(() =>
+    createConfigFromMode('batting')
+  );
 
   const [frames, setFrames] = useState<BrowserPoseFrame[]>([]);
   const [summary, setSummary] = useState<BrowserHeuristicSummary | null>(null);
@@ -185,6 +194,10 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
 
     setIsScanning(true);
     setScanProgress(0);
+  setFrames([]);
+  setSummary(null);
+  setActiveKeypoints([]);
+  setActiveTrajectory([]);
     appendReasoning({ message: 'Loading pose model and scanning frames (may take a while)…', timestamp: Date.now(), type: 'analysis' });
 
     try {
@@ -267,6 +280,18 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
   useEffect(() => {
     const first = presetForRole(role)[0];
     if (first) setPresetId(first.id);
+    setAdvancedOverlay((previous) =>
+      createConfigFromMode(role, {
+        objectDetectionThreshold: previous.objectDetectionThreshold,
+        prioritizeBall: previous.prioritizeBall,
+        trajectoryContinuity: previous.trajectoryContinuity,
+        entityColor: previous.entityColor,
+        trajectoryColor: previous.trajectoryColor,
+        lineWidth: previous.lineWidth,
+        trajectoryPoints: previous.trajectoryPoints,
+        showLabels: previous.showLabels,
+      })
+    );
   }, [role]);
 
   return (
@@ -288,11 +313,12 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 flex-1 min-h-0">
         <div className="flex flex-col gap-4 min-h-0">
           <div className="glass-panel rounded-2xl overflow-hidden">
-            <div
-              ref={videoContainerRef}
-              className="relative bg-slate-950 w-full"
-              style={{ aspectRatio: '16/9' }}
-            >
+            <div className="w-full md:w-3/4 mx-auto">
+              <div
+                ref={videoContainerRef}
+                className="relative bg-slate-950 w-full"
+                style={{ aspectRatio: '16/9' }}
+              >
               {videoSrc ? (
                 <video
                   ref={videoRef}
@@ -334,6 +360,9 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
                 width={videoSize.width}
                 height={videoSize.height}
                 mode="advanced"
+                advancedOverlay={advancedOverlay}
+                videoWidth={videoPixelSize.w}
+                videoHeight={videoPixelSize.h}
               />
 
               {isScanning && (
@@ -348,13 +377,14 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
                 </div>
               )}
 
-              {frames.length > 0 && !isScanning && (
-                <div className="absolute bottom-3 left-3 right-3 pointer-events-none">
-                  <p className="text-[11px] text-slate-200 bg-slate-900/80 border border-slate-700/60 rounded-lg px-2 py-1 line-clamp-2">
-                    Phase hint: {phaseLine}
-                  </p>
-                </div>
-              )}
+                {frames.length > 0 && !isScanning && (
+                  <div className="absolute bottom-3 left-3 right-3 pointer-events-none">
+                    <p className="text-[11px] text-slate-200 bg-slate-900/80 border border-slate-700/60 rounded-lg px-2 py-1 line-clamp-2">
+                      Phase hint: {phaseLine}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             <canvas ref={processCanvasRef} className="hidden" aria-hidden />
@@ -373,7 +403,7 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
                   </select>
                 </label>
                 <label className="flex items-center gap-2 text-slate-300">
-                  Dominant hand
+                  Primary wrist
                   <select
                     value={handedness}
                     onChange={(e) => setHandedness(e.target.value as 'right' | 'left')}
@@ -397,6 +427,43 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
                     ))}
                   </select>
                 </label>
+              </div>
+
+              <p className="text-[11px] text-slate-400 border border-slate-700/50 rounded-lg p-2 bg-slate-900/40">
+                Browser Lab uses role to choose batting vs bowling heuristics. Primary wrist only changes which wrist path is used for derived trajectory and motion summaries; it does not change the pose model itself.
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Role
+                  <span className="text-[10px] leading-4 text-slate-500">
+                    Chooses batting or bowling heuristics, preset comparisons, and the base overlay focus used after scan.
+                  </span>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Primary wrist
+                  <span className="text-[10px] leading-4 text-slate-500">
+                    Selects which wrist drives the derived wrist-travel metric and the displayed wrist trajectory path.
+                  </span>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Style preset
+                  <span className="text-[10px] leading-4 text-slate-500">
+                    Compares the scanned motion summary against an illustrative batting or bowling reference band.
+                  </span>
+                </label>
+              </div>
+
+              <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3 text-[11px] text-slate-400">
+                <p className="font-medium text-slate-200">Browser pose scan defaults</p>
+                <p>Model: {BROWSER_POSE_SCAN_DEFAULTS.modelVariant}</p>
+                <p>Running mode: {BROWSER_POSE_SCAN_DEFAULTS.runningMode}</p>
+                <p>Sample step: {BROWSER_POSE_SCAN_DEFAULTS.stepSec}s per frame</p>
+                <p>Max process width: {BROWSER_POSE_SCAN_DEFAULTS.maxProcessWidth}px</p>
+                <p>Max poses: {BROWSER_POSE_SCAN_DEFAULTS.numPoses}</p>
+                <p>
+                  Confidence gates: detect {BROWSER_POSE_SCAN_DEFAULTS.minPoseDetectionConfidence}, presence {BROWSER_POSE_SCAN_DEFAULTS.minPosePresenceConfidence}, tracking {BROWSER_POSE_SCAN_DEFAULTS.minTrackingConfidence}
+                </p>
               </div>
 
               {selectedPreset && (
@@ -482,8 +549,18 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-4 flex flex-col h-[420px] xl:h-[min(640px,70vh)] min-h-[320px]">
-          <ReasoningFeed entries={reasoningFeed} isAnalyzing={isScanning} />
+        <div className="flex flex-col gap-4 xl:h-[min(900px,80vh)]">
+          <VideoProcessingControls
+            value={advancedOverlay}
+            onChange={setAdvancedOverlay}
+            title="Browser Pose Controls"
+            lockedMode={role}
+            hideFocusMode
+            showHelperText
+          />
+          <div className="glass-panel rounded-2xl p-4 flex flex-col h-[420px] xl:h-[min(640px,70vh)] min-h-[320px]">
+            <ReasoningFeed entries={reasoningFeed} isAnalyzing={isScanning} />
+          </div>
         </div>
       </div>
     </div>

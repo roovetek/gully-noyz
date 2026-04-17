@@ -1,5 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { BoundingBox, SkeletonKeypoint, TrajectoryPoint } from './types';
+import {
+  capTrajectory,
+  createConfigFromMode,
+  filterKeypointsForConfig,
+  getPrecisionMultiplier,
+  getVideoRenderPrecisionConfig,
+  shouldUseSubPixelPrecision,
+  type AdvancedOverlayConfig,
+  type VideoRenderPrecisionConfig,
+} from '../../types/videoConfig';
 
 interface VideoOverlayProps {
   boundingBoxes: BoundingBox[];
@@ -8,6 +18,10 @@ interface VideoOverlayProps {
   width: number;
   height: number;
   mode?: 'simplified' | 'advanced';
+  advancedOverlay?: Partial<AdvancedOverlayConfig>;
+  videoWidth?: number;
+  videoHeight?: number;
+  renderPrecision?: Partial<VideoRenderPrecisionConfig>;
 }
 
 const SKELETON_CONNECTIONS: [string, string][] = [
@@ -48,8 +62,23 @@ export function VideoOverlay({
   width,
   height,
   mode = 'simplified',
+  advancedOverlay,
+  videoWidth,
+  videoHeight,
+  renderPrecision,
 }: VideoOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayConfig = useMemo(
+    () =>
+      advancedOverlay
+        ? createConfigFromMode(advancedOverlay.mode ?? 'mixed', advancedOverlay)
+        : null,
+    [advancedOverlay]
+  );
+  const precisionConfig = useMemo(
+    () => getVideoRenderPrecisionConfig(renderPrecision),
+    [renderPrecision]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -59,44 +88,91 @@ export function VideoOverlay({
 
     ctx.clearRect(0, 0, width, height);
 
-    const boxesToDraw =
-      mode === 'simplified'
-        ? boundingBoxes.filter((b) => {
-            const label = b.label.toLowerCase();
+    const snapMultiplier =
+      overlayConfig && videoWidth && videoHeight
+        ? getPrecisionMultiplier(width, height)
+        : null;
+    const roundCoordinates =
+      overlayConfig && videoWidth && videoHeight
+        ? shouldUseSubPixelPrecision(videoWidth, videoHeight)
+          ? precisionConfig.roundCoordinatesSmallVideos
+          : precisionConfig.roundCoordinatesRegularVideos
+        : false;
+    const snap = (value: number) => {
+      if (!roundCoordinates || !snapMultiplier) {
+        return value;
+      }
+      return Math.round(value * snapMultiplier) / snapMultiplier;
+    };
+
+    const boxesToDraw = overlayConfig
+      ? boundingBoxes.filter((box) => {
+          const label = box.label.toLowerCase();
+          const matchesBall = label.includes('ball');
+          const matchesBat = label.includes('bat');
+          const matchesBatsman = label.includes('batsman');
+          const matchesBowler = label.includes('bowler');
+
+          if (overlayConfig.trackingMode === 'active-bat' && !(matchesBall || matchesBat || matchesBatsman)) {
+            return false;
+          }
+          if (overlayConfig.trackingMode === 'active-bowler' && !(matchesBall || matchesBowler)) {
+            return false;
+          }
+          if (matchesBall) {
+            return box.confidence >= overlayConfig.objectDetectionThreshold.ball;
+          }
+          if (matchesBat) {
+            return box.confidence >= overlayConfig.objectDetectionThreshold.bat;
+          }
+          return box.confidence >= overlayConfig.objectDetectionThreshold.player;
+        })
+      : mode === 'simplified'
+        ? boundingBoxes.filter((box) => {
+            const label = box.label.toLowerCase();
             return label.includes('ball') || label.includes('batsman') || label.includes('bowler');
           })
         : boundingBoxes;
 
     for (const box of boxesToDraw) {
-      const color = getLabelColor(box.label);
+      const color = overlayConfig?.entityColor ?? getLabelColor(box.label);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = overlayConfig?.lineWidth ?? 2;
       ctx.shadowColor = color;
       ctx.shadowBlur = 8;
-      ctx.strokeRect(box.x, box.y, box.w, box.h);
+      ctx.strokeRect(snap(box.x), snap(box.y), box.w, box.h);
       ctx.shadowBlur = 0;
 
-      if (mode === 'advanced') {
+      if (mode === 'advanced' && (overlayConfig?.showLabels ?? true)) {
         const alpha = Math.round(box.confidence * 255)
           .toString(16)
           .padStart(2, '0');
         ctx.fillStyle = `${color}${alpha}`;
-        ctx.fillRect(box.x, box.y - 22, box.w, 22);
+        ctx.fillRect(snap(box.x), snap(box.y - 22), box.w, 22);
 
         ctx.fillStyle = '#0f172a';
         ctx.font = 'bold 11px sans-serif';
-        ctx.fillText(`${box.label} ${Math.round(box.confidence * 100)}%`, box.x + 4, box.y - 6);
+        ctx.fillText(`${box.label} ${Math.round(box.confidence * 100)}%`, snap(box.x + 4), snap(box.y - 6));
       }
     }
 
-    if (mode === 'advanced' && skeletonKeypoints.length > 0) {
+    const keypointsToDraw = overlayConfig
+      ? filterKeypointsForConfig(skeletonKeypoints, overlayConfig)
+      : skeletonKeypoints;
+
+    if (mode === 'advanced' && keypointsToDraw.length > 0) {
       const keypointMap = new Map<string, SkeletonKeypoint>();
-      for (const kp of skeletonKeypoints) {
-        keypointMap.set(kp.label, kp);
+      for (const keypoint of keypointsToDraw) {
+        keypointMap.set(keypoint.label, {
+          ...keypoint,
+          x: snap(keypoint.x),
+          y: snap(keypoint.y),
+        });
       }
 
-      ctx.strokeStyle = '#34d39980';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = overlayConfig ? `${overlayConfig.entityColor}99` : '#34d39980';
+      ctx.lineWidth = overlayConfig?.lineWidth ?? 2;
+
       for (const [a, b] of SKELETON_CONNECTIONS) {
         const kpA = keypointMap.get(a);
         const kpB = keypointMap.get(b);
@@ -108,43 +184,72 @@ export function VideoOverlay({
         }
       }
 
-      for (const kp of skeletonKeypoints) {
+      for (const keypoint of keypointMap.values()) {
         ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#34d399';
-        ctx.shadowColor = '#34d399';
+        ctx.arc(keypoint.x, keypoint.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = overlayConfig?.entityColor ?? '#34d399';
+        ctx.shadowColor = overlayConfig?.entityColor ?? '#34d399';
         ctx.shadowBlur = 6;
         ctx.fill();
         ctx.shadowBlur = 0;
       }
     }
 
-    if (trajectoryPoints.length > 1) {
-      const sorted = [...trajectoryPoints].sort((a, b) => a.t - b.t);
+    const sortedTrajectory = [...trajectoryPoints].sort((a, b) => a.t - b.t);
+    const trajectoryToDraw = overlayConfig
+      ? capTrajectory(sortedTrajectory, overlayConfig.trajectoryPoints)
+      : sortedTrajectory;
+
+    if ((!overlayConfig || overlayConfig.trajectoryMode !== 'none') && trajectoryToDraw.length > 1) {
       ctx.beginPath();
-      ctx.moveTo(sorted[0].x, sorted[0].y);
-      for (let i = 1; i < sorted.length; i += 1) {
-        ctx.lineTo(sorted[i].x, sorted[i].y);
+      ctx.moveTo(snap(trajectoryToDraw[0].x), snap(trajectoryToDraw[0].y));
+      for (let i = 1; i < trajectoryToDraw.length; i += 1) {
+        ctx.lineTo(snap(trajectoryToDraw[i].x), snap(trajectoryToDraw[i].y));
       }
-      ctx.strokeStyle = mode === 'advanced' ? '#fbbf24' : '#fde047';
-      ctx.lineWidth = mode === 'advanced' ? 2 : 3;
-      ctx.setLineDash(mode === 'advanced' ? [6, 4] : []);
-      ctx.shadowColor = mode === 'advanced' ? '#fbbf24' : '#fde047';
-      ctx.shadowBlur = mode === 'advanced' ? 10 : 14;
+
+      const trajectoryColor = overlayConfig
+        ? overlayConfig.trajectoryColor
+        : mode === 'advanced'
+          ? '#fbbf24'
+          : '#fde047';
+      ctx.strokeStyle = trajectoryColor;
+      ctx.lineWidth = overlayConfig?.lineWidth ?? (mode === 'advanced' ? 2 : 3);
+      ctx.setLineDash(
+        overlayConfig
+          ? overlayConfig.trajectoryMode === 'swing-arc'
+            ? [6, 4]
+            : []
+          : mode === 'advanced'
+            ? [6, 4]
+            : []
+      );
+      ctx.shadowColor = trajectoryColor;
+      ctx.shadowBlur = overlayConfig ? 10 : mode === 'advanced' ? 10 : 14;
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
 
-      const last = sorted[sorted.length - 1];
+      const last = trajectoryToDraw[trajectoryToDraw.length - 1];
       ctx.beginPath();
-      ctx.arc(last.x, last.y, mode === 'advanced' ? 5 : 6, 0, Math.PI * 2);
-      ctx.fillStyle = mode === 'advanced' ? '#fbbf24' : '#fde047';
-      ctx.shadowColor = mode === 'advanced' ? '#fbbf24' : '#fde047';
-      ctx.shadowBlur = mode === 'advanced' ? 12 : 18;
+      ctx.arc(snap(last.x), snap(last.y), overlayConfig ? 5 : mode === 'advanced' ? 5 : 6, 0, Math.PI * 2);
+      ctx.fillStyle = trajectoryColor;
+      ctx.shadowColor = trajectoryColor;
+      ctx.shadowBlur = overlayConfig ? 12 : mode === 'advanced' ? 12 : 18;
       ctx.fill();
       ctx.shadowBlur = 0;
     }
-  }, [boundingBoxes, mode, skeletonKeypoints, trajectoryPoints, width, height]);
+  }, [
+    boundingBoxes,
+    height,
+    mode,
+    overlayConfig,
+    precisionConfig,
+    skeletonKeypoints,
+    trajectoryPoints,
+    videoHeight,
+    videoWidth,
+    width,
+  ]);
 
   return (
     <canvas
