@@ -7,6 +7,8 @@ import { getTestDataFilter } from '../lib/testDataFilter';
 import { calculateMatchStats } from '../lib/match';
 import { logger } from '../lib/logger';
 import { userFriendlyMessage } from '../lib/userFriendlyError';
+import { verifySecret, SecureStorage } from '../lib/security';
+import { STORAGE_KEYS, ERROR_MESSAGES } from '../lib/constants';
 
 interface MatchInfo {
   match_id: string;
@@ -191,7 +193,7 @@ export function MatchList({ onBack }: MatchListProps) {
 
   const handleJoinMatch = async (match: MatchInfo) => {
     if (!match.is_public) {
-      const storedSecret = sessionStorage.getItem(`match_secret_${match.match_id}`);
+      const storedSecret = SecureStorage.getItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${match.match_id}`);
       if (!storedSecret) {
         setPendingMatch({ id: match.match_id, name: match.name });
         setPendingAction('join');
@@ -205,7 +207,15 @@ export function MatchList({ onBack }: MatchListProps) {
         .eq('match_id', match.match_id)
         .maybeSingle();
 
-      if (!matchData || matchData.secret_hash !== btoa(storedSecret)) {
+      if (!matchData || !matchData.secret_hash) {
+        setPendingMatch({ id: match.match_id, name: match.name });
+        setPendingAction('join');
+        setShowSecretPrompt(true);
+        return;
+      }
+
+      const isValid = await verifySecret(storedSecret, matchData.secret_hash);
+      if (!isValid) {
         setPendingMatch({ id: match.match_id, name: match.name });
         setPendingAction('join');
         setShowSecretPrompt(true);
@@ -219,7 +229,7 @@ export function MatchList({ onBack }: MatchListProps) {
   const handleRenameClick = (match: MatchInfo, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!match.is_public) {
-      const storedSecret = sessionStorage.getItem(`match_secret_${match.match_id}`);
+      const storedSecret = SecureStorage.getItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${match.match_id}`);
       if (!storedSecret) {
         setPendingMatch({ id: match.match_id, name: match.name });
         setPendingAction('rename');
@@ -285,13 +295,13 @@ export function MatchList({ onBack }: MatchListProps) {
         .eq('match_id', pendingMatch.id)
         .maybeSingle();
 
-      if (!match) {
-        return { success: false, error: 'Match not found' };
+      if (!match || !match.secret_hash) {
+        return { success: false, error: ERROR_MESSAGES.MATCH_NOT_FOUND };
       }
 
-      const secretHash = btoa(secret);
-      if (match.secret_hash === secretHash) {
-        sessionStorage.setItem(`match_secret_${pendingMatch.id}`, secret);
+      const isValid = await verifySecret(secret, match.secret_hash);
+      if (isValid) {
+        SecureStorage.setItem(`${STORAGE_KEYS.MATCH_SECRET_PREFIX}${pendingMatch.id}`, secret);
         setShowSecretPrompt(false);
 
         if (pendingAction === 'join') {
@@ -314,7 +324,7 @@ export function MatchList({ onBack }: MatchListProps) {
         return { success: false, error: 'Incorrect secret' };
       }
     } catch (err) {
-      console.error('Error verifying secret:', err);
+      logger.error('Error verifying secret', err);
       return { success: false, error: 'Failed to verify secret' };
     }
   };
