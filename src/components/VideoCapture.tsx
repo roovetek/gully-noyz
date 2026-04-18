@@ -962,8 +962,9 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
 
       <canvas ref={canvasRef} className="hidden" />
 
-      <div className="absolute top-0 left-0 right-0 z-10 space-y-1 p-2 text-white sm:space-y-2 sm:p-3">
-        {cameraError && (
+      <div className="absolute top-0 left-0 right-0 z-10 p-2 text-white sm:p-3">
+        <div className="space-y-1 sm:space-y-2">
+          {cameraError && (
           <div
             role="alert"
             className="bg-red-500/20 border border-red-400 rounded-lg p-3 flex flex-col gap-2"
@@ -977,9 +978,9 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
               Dismiss
             </button>
           </div>
-        )}
+          )}
 
-        {voiceError && (
+          {voiceError && (
           <div
             role="alert"
             className="bg-red-500/20 border border-red-400 rounded-lg p-3 flex items-center justify-between"
@@ -993,9 +994,9 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
               Dismiss
             </button>
           </div>
-        )}
+          )}
 
-        {voiceToast && (
+          {voiceToast && (
           <div
             role="status"
             aria-live="polite"
@@ -1004,72 +1005,79 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
             <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Voice</p>
             <p className="mt-0.5 text-sm font-semibold text-white">{voiceToast}</p>
           </div>
-        )}
+          )}
 
-        {!showDrawer && (
-          <>
-            <div className="bg-black/70 backdrop-blur rounded-lg px-4 py-2 mb-2 text-center border-2 border-orange-400">
-              <span className="text-orange-400 text-lg font-bold">Innings {currentInnings}</span>
-              <span className="text-gray-400 text-sm ml-2">of 2</span>
+          {!showDrawer && (
+          <div className="max-h-[min(40vh,300px)] space-y-1 overflow-y-auto overscroll-contain pb-0.5 sm:max-h-none sm:space-y-2 sm:overflow-visible">
+            <div className="mb-2 bg-black/70 backdrop-blur rounded-lg border-2 border-orange-400 px-3 py-1.5 text-center sm:px-4 sm:py-2">
+              <span className="text-base font-bold text-orange-400 sm:text-lg">Innings {currentInnings}</span>
+              <span className="ml-2 text-xs text-gray-400 sm:text-sm">of 2</span>
             </div>
 
             {inningsComplete && currentInnings === 1 && (
-              <div className="bg-yellow-400/20 border border-yellow-400 rounded-lg p-3 mb-2 text-center">
-                <p className="text-yellow-400 font-semibold">Innings 1 Complete! Start Innings 2</p>
+              <div className="mb-2 border border-yellow-400 bg-yellow-400/20 p-2 text-center sm:p-3">
+                <p className="text-xs font-semibold text-yellow-400 sm:text-sm">Innings 1 Complete! Start Innings 2</p>
               </div>
             )}
 
             {inningsComplete && currentInnings === 2 && (
-              <div className="bg-green-400/20 border border-green-400 rounded-lg p-3 mb-2 text-center">
-                <p className="text-green-400 font-semibold">Match Complete!</p>
+              <div className="mb-2 border border-green-400 bg-green-400/20 p-2 text-center sm:p-3">
+                <p className="text-xs font-semibold text-green-400 sm:text-sm">Match Complete!</p>
               </div>
             )}
 
-            <div className="flex justify-between items-center gap-2 mb-2">
-              <div className="bg-black/70 backdrop-blur px-4 py-2 rounded-lg border border-green-400">
-                <span className="text-sm text-gray-300">Over {overNumber} - Ball </span>
-                <span className="text-lg font-bold text-green-400">{ballNumber}</span>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="min-w-0 rounded-lg border border-green-400 bg-black/70 px-2 py-1.5 backdrop-blur sm:px-4 sm:py-2">
+                <span className="text-xs text-gray-300 sm:text-sm">Over {overNumber} - Ball </span>
+                <span className="text-base font-bold text-green-400 sm:text-lg">{ballNumber}</span>
               </div>
 
               {isRecording && (
-                <div className="bg-red-500/80 backdrop-blur px-4 py-2 rounded-lg">
-                  <span className="text-sm font-semibold">
+                <div className="shrink-0 rounded-lg bg-red-500/80 px-2 py-1.5 backdrop-blur sm:px-4 sm:py-2">
+                  <span className="text-xs font-semibold sm:text-sm">
                     {isPaused ? 'Paused ' : ''}{recordingTime}s / 15s
                   </span>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-green-400">
-                <div className="text-gray-400 text-xs">Runs</div>
-                <div className="text-green-400 text-lg font-bold">{totalRuns}</div>
+            <div className="mb-2 grid grid-cols-3 gap-1.5 sm:gap-2">
+              <div className="border border-green-400 bg-black/70 rounded-lg p-1.5 text-center backdrop-blur sm:p-2">
+                <div className="text-[10px] text-gray-400 sm:text-xs">Runs</div>
+                <div className="text-base font-bold text-green-400 sm:text-lg">{totalRuns}</div>
               </div>
-              <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-blue-400">
-                <div className="text-gray-400 text-xs">Overs</div>
-                <div className="text-blue-400 text-lg font-bold">{currentOvers}</div>
+              <div className="border border-blue-400 bg-black/70 rounded-lg p-1.5 text-center backdrop-blur sm:p-2">
+                <div className="text-[10px] text-gray-400 sm:text-xs">Overs</div>
+                <div className="text-base font-bold text-blue-400 sm:text-lg">{currentOvers}</div>
               </div>
-              <div className="bg-black/70 backdrop-blur rounded-lg p-2 text-center border border-red-400">
-                <div className="text-gray-400 text-xs">Wickets</div>
-                <div className="text-red-400 text-lg font-bold">{totalWickets}</div>
+              <div className="border border-red-400 bg-black/70 rounded-lg p-1.5 text-center backdrop-blur sm:p-2">
+                <div className="text-[10px] text-gray-400 sm:text-xs">Wickets</div>
+                <div className="text-base font-bold text-red-400 sm:text-lg">{totalWickets}</div>
               </div>
             </div>
 
-            <div className="bg-black/70 backdrop-blur rounded-lg px-3 py-2 border border-purple-400">
-              <div className="text-xs text-gray-400">
-                Trim start: <span className="text-white">{formatMs(trimStartMs)}s</span>
-                <span className="mx-2 text-gray-500">|</span>
-                Trim end: <span className="text-white">{formatMs(trimEndMs)}s</span>
-                <span className="mx-2 text-gray-500">|</span>
-                Hit: <span className="text-white">{formatMs(hitTimestampMs)}s</span>
+            <div className="rounded-lg border border-purple-400 bg-black/70 px-2 py-1.5 backdrop-blur sm:px-3 sm:py-2">
+              <div className="flex flex-col gap-1 text-[10px] text-gray-400 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-0 sm:text-xs">
+                <span className="break-words">
+                  Trim start: <span className="text-white">{formatMs(trimStartMs)}s</span>
+                </span>
+                <span className="hidden text-gray-500 sm:inline">|</span>
+                <span className="break-words">
+                  Trim end: <span className="text-white">{formatMs(trimEndMs)}s</span>
+                </span>
+                <span className="hidden text-gray-500 sm:inline">|</span>
+                <span className="break-words">
+                  Hit: <span className="text-white">{formatMs(hitTimestampMs)}s</span>
+                </span>
               </div>
             </div>
-          </>
-        )}
+          </div>
+          )}
+        </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-2 px-4 pb-20 pt-1">
-        <div className="shrink-0 rounded-lg border border-cyan-400 bg-black/85 px-3 py-2 backdrop-blur">
+      <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-1.5 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] pt-1 sm:gap-2 sm:px-4 sm:pb-2">
+        <div className="shrink-0 rounded-lg border border-cyan-400 bg-black/85 px-2 py-1.5 backdrop-blur sm:px-3 sm:py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-cyan-300">AI Assist</span>
             <select
@@ -1095,25 +1103,25 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
           <button
             onClick={() => void handleStartDelivery()}
             disabled={showDrawer || inningsComplete || !!overCompleteData || isUploading}
-            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
+            className="min-w-0 rounded-lg bg-emerald-500 py-1.5 text-[10px] font-bold leading-tight text-black transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 sm:py-2 sm:text-xs"
           >
             Start Recording
           </button>
           <button
             onClick={handleBallDead}
             disabled={!isRecording || isUploading}
-            className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
+            className="min-w-0 rounded-lg bg-amber-500 py-1.5 text-[10px] font-bold leading-tight text-black transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50 sm:py-2 sm:text-xs"
           >
             Stop Recording
           </button>
           <button
             onClick={handleMarkHit}
             disabled={(!isRecording && !showDrawer) || isUploading}
-            className="bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-2 rounded-lg text-xs transition-colors"
+            className="min-w-0 rounded-lg bg-cyan-500 py-1.5 text-[10px] font-bold leading-tight text-black transition-colors hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-50 sm:py-2 sm:text-xs"
           >
             Mark Hit
           </button>
@@ -1123,15 +1131,15 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
             onPointerCancel={stopVoiceCapture}
             onPointerLeave={stopVoiceCapture}
             disabled={isUploading}
-            className={`flex items-center justify-center gap-1 font-bold py-2 rounded-lg text-xs transition-colors ${
+            className={`flex min-w-0 items-center justify-center gap-0.5 rounded-lg py-1.5 text-[10px] font-bold leading-tight transition-colors sm:gap-1 sm:py-2 sm:text-xs ${
               isListening
                 ? 'bg-purple-600 text-white'
-                : 'bg-purple-500 hover:bg-purple-600 text-black'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                : 'bg-purple-500 text-black hover:bg-purple-600'
+            } disabled:cursor-not-allowed disabled:opacity-50`}
             title="Hold to talk"
           >
-            <Mic size={14} />
-            {isListening ? 'Listening' : 'Hold to Talk'}
+            <Mic className="shrink-0" size={13} />
+            <span className="min-w-0 text-center">{isListening ? 'Listening' : 'Hold to Talk'}</span>
           </button>
         </div>
 

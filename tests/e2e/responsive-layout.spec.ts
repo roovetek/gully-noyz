@@ -7,6 +7,7 @@ type ResponsiveViewport = {
 };
 
 const responsiveViewports: ResponsiveViewport[] = [
+  { name: 'mobile-320x568', width: 320, height: 568 },
   { name: 'mobile-390x844', width: 390, height: 844 },
   { name: 'tablet-768x1024', width: 768, height: 1024 },
   { name: 'desktop-1280x720', width: 1280, height: 720 },
@@ -42,6 +43,12 @@ test.describe('Responsive layout suite', () => {
       });
 
       await recordPage.expectLoaded();
+
+      const docOverflow = await page.evaluate(() => {
+        const el = document.documentElement;
+        return el.scrollWidth <= el.clientWidth + 1;
+      });
+      expect(docOverflow).toBe(true);
 
       const summaryStrip = page.getByTestId('match-page-summary-strip');
       const captureModePicker = page.getByTestId('capture-mode-picker');

@@ -38,10 +38,10 @@ export function useCaptureMode(): CaptureMode {
   return mode;
 }
 
-const MODES: { value: CaptureMode; label: string; Icon: LucideIcon }[] = [
-  { value: 'video+voice', label: 'Video + Voice', Icon: Video },
-  { value: 'voice', label: 'Voice Only', Icon: Mic },
-  { value: 'manual', label: 'Log Only', Icon: ClipboardList },
+const MODES: { value: CaptureMode; label: string; shortLabel: string; Icon: LucideIcon }[] = [
+  { value: 'video+voice', label: 'Video + Voice', shortLabel: 'V+Voice', Icon: Video },
+  { value: 'voice', label: 'Voice Only', shortLabel: 'Voice', Icon: Mic },
+  { value: 'manual', label: 'Log Only', shortLabel: 'Log', Icon: ClipboardList },
 ];
 
 export function CaptureModePicker() {
@@ -49,29 +49,31 @@ export function CaptureModePicker() {
 
   return (
     <div
-      className="flex gap-1.5 rounded-xl bg-gray-900/60 p-1.5"
+      className="flex min-w-0 gap-1 rounded-lg bg-gray-900/60 p-1 sm:gap-1.5 sm:rounded-xl sm:p-1.5"
       data-testid="capture-mode-picker"
       role="group"
       aria-label="Capture mode"
     >
-      {MODES.map(({ value, label, Icon }) => {
+      {MODES.map(({ value, label, shortLabel, Icon }) => {
         const active = current === value;
         return (
           <button
             key={value}
             type="button"
             aria-pressed={active}
+            aria-label={label}
             data-testid={`capture-mode-${value}`}
             onClick={() => setCaptureMode(value)}
             className={[
-              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition-all',
+              'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] font-semibold leading-tight transition-all sm:flex-row sm:gap-1.5 sm:rounded-lg sm:px-2 sm:text-xs',
               active
                 ? 'bg-white text-gray-900 shadow'
                 : 'text-gray-400 hover:text-white',
             ].join(' ')}
           >
-            <Icon size={13} />
-            {label}
+            <Icon className="shrink-0" size={14} />
+            <span className="max-w-full truncate sm:hidden">{shortLabel}</span>
+            <span className="hidden sm:inline">{label}</span>
           </button>
         );
       })}

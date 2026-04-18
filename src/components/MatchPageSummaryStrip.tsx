@@ -8,7 +8,7 @@ export function MatchPageSummaryStrip({ children }: { children: ReactNode }) {
   return (
     <div
       data-testid="match-page-summary-strip"
-      className="shrink-0 px-4 pt-3 pb-3 border-b border-gray-800 bg-black flex justify-start"
+      className="shrink-0 border-b border-gray-800 bg-black px-3 pb-2 pt-2 flex justify-start sm:px-4 sm:pb-3 sm:pt-3"
     >
       {children}
     </div>
