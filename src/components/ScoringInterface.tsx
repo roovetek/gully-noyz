@@ -35,10 +35,10 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
   if (!matchClips) {
     return (
       <div className="flex h-full flex-col">
-        <div className="px-2 pb-1.5 pt-2 sm:px-3 sm:pb-2 sm:pt-3">
+        <div className="relative z-30 shrink-0 px-2 pb-1.5 pt-2 sm:px-3 sm:pb-2 sm:pt-3">
           <CaptureModePicker />
         </div>
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           <div className="h-full w-full" data-testid="video-capture" />
         </div>
       </div>
@@ -290,10 +290,10 @@ export function ScoringInterface({ onDelivered }: ScoringInterfaceProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="relative z-20 px-2 pb-1.5 pt-2 sm:px-3 sm:pb-2 sm:pt-3">
+      <div className="relative z-30 shrink-0 px-2 pb-1.5 pt-2 sm:px-3 sm:pb-2 sm:pt-3">
         <CaptureModePicker />
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {renderCaptureArea()}
       </div>
     </div>

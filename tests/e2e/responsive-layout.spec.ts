@@ -52,13 +52,11 @@ test.describe('Responsive layout suite', () => {
 
       const summaryStrip = page.getByTestId('match-page-summary-strip');
       const captureModePicker = page.getByTestId('capture-mode-picker');
-      const aiAssistModeSelect = page.getByTestId('ai-assist-mode-select');
       const startRecordingButton = page.getByRole('button', { name: 'Start Recording' }).first();
       const skipRecordingButton = page.getByTestId('skip-recording-button');
 
       await expect(summaryStrip).toBeVisible();
       await expect(captureModePicker).toBeVisible();
-      await expect(aiAssistModeSelect).toBeVisible();
       await expect(startRecordingButton).toBeVisible();
       await expect(skipRecordingButton).toBeVisible();
 

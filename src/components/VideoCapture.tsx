@@ -1077,30 +1077,25 @@ export function VideoCapture({ onRecordingDone }: VideoCaptureProps = {}) {
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-1.5 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] pt-1 sm:gap-2 sm:px-4 sm:pb-2">
-        <div className="shrink-0 rounded-lg border border-cyan-400 bg-black/85 px-2 py-1.5 backdrop-blur sm:px-3 sm:py-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-cyan-300">AI Assist</span>
-            <select
-              data-testid="ai-assist-mode-select"
-              aria-label="AI assist mode"
-              value={aiMode}
-              onChange={(e) => {
-                const nextMode = e.target.value as AIScoringMode;
-                setAIScoringMode(nextMode);
-                setAiMode(nextMode);
-                setAiSuggestion(null);
-                setAiStatus(nextMode === 'off' ? 'AI assist is off' : 'Mode updated');
-              }}
-              className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white"
-            >
-              <option value="off">Manual only</option>
-              <option value="live">Local AI</option>
-              <option value="mock">Mock AI</option>
-            </select>
-          </div>
-          <div data-testid="ai-assist-status" className="mt-1 text-[11px] text-gray-300">
-            {aiStatus}
-          </div>
+        {/* Hidden controls keep AI mode testable / adjustable without the on-screen card */}
+        <div className="sr-only">
+          <select
+            data-testid="ai-assist-mode-select"
+            aria-label="AI assist mode"
+            value={aiMode}
+            onChange={(e) => {
+              const nextMode = e.target.value as AIScoringMode;
+              setAIScoringMode(nextMode);
+              setAiMode(nextMode);
+              setAiSuggestion(null);
+              setAiStatus(nextMode === 'off' ? 'AI assist is off' : 'Mode updated');
+            }}
+          >
+            <option value="off">Manual only</option>
+            <option value="live">Local AI</option>
+            <option value="mock">Mock AI</option>
+          </select>
+          <div data-testid="ai-assist-status">{aiStatus}</div>
         </div>
 
         <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">

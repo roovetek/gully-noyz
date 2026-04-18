@@ -41,7 +41,6 @@ test.describe('Voice mode UI flow', () => {
       .poll(async () => page.evaluate(() => sessionStorage.getItem('capture_mode')))
       .toBe('manual');
 
-    await expect(page.getByTestId('ai-assist-mode-select')).toBeVisible();
     await expect(page.getByTestId('capture-mode-picker')).toBeVisible();
 
     // CaptureModePicker is always visible — switch back to voice

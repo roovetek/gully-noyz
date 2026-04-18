@@ -129,7 +129,7 @@ describe('VideoCapture smoke', () => {
     await waitFor(() => {
       expect(screen.getByText('Innings 1')).toBeInTheDocument();
       expect(screen.getByText(/Start (Delivery|Recording)/)).toBeInTheDocument();
-      expect(screen.getByText('AI Assist')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-assist-mode-select')).toBeInTheDocument();
     });
   });
 
@@ -180,7 +180,7 @@ describe('VideoCapture smoke', () => {
     render(<VideoCapture />);
 
     await waitFor(() => {
-      expect(screen.getByText('AI Assist')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-assist-mode-select')).toBeInTheDocument();
     });
 
     const aiSelect = screen.getByRole('combobox', { name: 'AI assist mode' });

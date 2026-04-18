@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Play } from 'lucide-react';
+import { Play, VideoOff } from 'lucide-react';
 import type { Clip } from '../lib/supabase';
 import { useMatchClips } from '../context/MatchClipsContext';
 import { calculateInningsOversDisplay } from '../lib/match';
@@ -32,6 +32,11 @@ export function MatchTimeline() {
       setAvailableBalls([]);
     }
   }, [selectedOver, clips, selectedInnings]);
+
+  const matchHasAnyVideo = useMemo(
+    () => clips.some((c) => Boolean(c.video_url?.trim())),
+    [clips]
+  );
 
   const filteredClips = useMemo(() => {
     return clips
@@ -184,6 +189,19 @@ export function MatchTimeline() {
   return (
     <div className="min-h-screen bg-black text-white pb-20">
       <div className="p-4 mb-4 bg-gray-900 border-b border-gray-800">
+        {clips.length > 0 && !matchHasAnyVideo && (
+          <div
+            data-testid="timeline-no-video-banner"
+            className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90"
+          >
+            <p className="font-medium text-amber-100">No video for this match yet</p>
+            <p className="mt-1 text-amber-100/80">
+              Clips were logged without camera video. Record with the camera on the Record tab to
+              capture video here.
+            </p>
+          </div>
+        )}
+
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setSelectedInnings(1)}
@@ -279,26 +297,39 @@ export function MatchTimeline() {
               className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden transition-all"
             >
               <div className="relative">
-                <video
-                  id={`video-${clip.id}`}
-                  src={clip.video_url || undefined}
-                  className="w-full max-h-60 bg-black object-contain"
-                  controls
-                  playsInline
-                  preload="metadata"
-                  onLoadedMetadata={(event) => handleVideoLoadedMetadata(event.currentTarget, clip)}
-                  onPlay={() => setPlayingClipId(clip.id)}
-                  onPause={() => setPlayingClipId(null)}
-                />
-                {playingClipId !== clip.id && (
-                  <button
-                    onClick={() => handlePlayClip(clip.id)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
+                {clip.video_url?.trim() ? (
+                  <>
+                    <video
+                      id={`video-${clip.id}`}
+                      src={clip.video_url}
+                      className="w-full max-h-60 bg-black object-contain"
+                      controls
+                      playsInline
+                      preload="metadata"
+                      onLoadedMetadata={(event) => handleVideoLoadedMetadata(event.currentTarget, clip)}
+                      onPlay={() => setPlayingClipId(clip.id)}
+                      onPause={() => setPlayingClipId(null)}
+                    />
+                    {playingClipId !== clip.id && (
+                      <button
+                        type="button"
+                        onClick={() => handlePlayClip(clip.id)}
+                        className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors"
+                      >
+                        <div className="w-16 h-16 bg-green-500/90 rounded-full flex items-center justify-center">
+                          <Play size={28} className="text-white ml-1" />
+                        </div>
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    data-testid="timeline-empty-video-placeholder"
+                    className="flex min-h-[12rem] w-full flex-col items-center justify-center gap-2 bg-gray-950 px-4 py-8"
                   >
-                    <div className="w-16 h-16 bg-green-500/90 rounded-full flex items-center justify-center">
-                      <Play size={28} className="text-white ml-1" />
-                    </div>
-                  </button>
+                    <VideoOff className="text-gray-500" size={40} aria-hidden />
+                    <p className="text-center text-sm text-gray-400">No video for this clip</p>
+                  </div>
                 )}
               </div>
 

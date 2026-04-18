@@ -204,7 +204,10 @@ async function captureScreenshots(baseUrl) {
     'Created match and landed in record view',
     [
       { label: 'Start Delivery visible', pass: await page.getByRole('button', { name: 'Start Delivery' }).isVisible() },
-      { label: 'AI Assist block visible', pass: await page.getByText(/^AI Assist$/).isVisible() },
+      {
+        label: 'AI assist mode control present',
+        pass: (await page.getByTestId('ai-assist-mode-select').count()) > 0,
+      },
       { label: 'Bottom nav visible', pass: await page.getByRole('button', { name: 'Timeline', exact: true }).isVisible() },
     ],
     'On shorter screens, ensure trim/AI info cards do not push critical controls below thumb-reachable area.'
