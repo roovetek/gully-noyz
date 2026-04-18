@@ -17,7 +17,9 @@ import { createConfigFromMode, type AdvancedOverlayConfig } from '../../types/vi
 import {
   BROWSER_POSE_SCAN_DEFAULTS,
   runBrowserPoseScan,
+  defaultBrowserPoseLandmarkerOptions,
   type BrowserPoseFrame,
+  type BrowserPoseLandmarkerOptions,
 } from './browserPose/runBrowserPoseScan';
 import { mapSkeletonToDisplay, normalizedToContainerPx } from './browserPose/videoContainMapping';
 import {
@@ -87,6 +89,14 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
 
   const [activeKeypoints, setActiveKeypoints] = useState<SkeletonKeypoint[]>([]);
   const [activeTrajectory, setActiveTrajectory] = useState<TrajectoryPoint[]>([]);
+
+  const [scanStepSec, setScanStepSec] = useState<number>(BROWSER_POSE_SCAN_DEFAULTS.stepSec);
+  const [scanMaxProcessWidth, setScanMaxProcessWidth] = useState<number>(
+    BROWSER_POSE_SCAN_DEFAULTS.maxProcessWidth
+  );
+  const [scanPoseOpts, setScanPoseOpts] = useState<BrowserPoseLandmarkerOptions>(() =>
+    defaultBrowserPoseLandmarkerOptions()
+  );
 
   const appendReasoning = useCallback((entry: ReasoningEntry) => {
     setReasoningFeed((prev) => [entry, ...prev].slice(0, 80));
@@ -204,8 +214,9 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
       const scanned = await runBrowserPoseScan({
         video,
         canvas,
-        stepSec: 0.12,
-        maxProcessWidth: 480,
+        stepSec: scanStepSec,
+        maxProcessWidth: scanMaxProcessWidth,
+        poseLandmarker: scanPoseOpts,
         onProgress: setScanProgress,
       });
       setFrames(scanned);
@@ -238,7 +249,17 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
     } finally {
       setIsScanning(false);
     }
-  }, [appendReasoning, handedness, presetId, role, updateOverlayForTime, videoSrc]);
+  }, [
+    appendReasoning,
+    handedness,
+    presetId,
+    role,
+    scanMaxProcessWidth,
+    scanPoseOpts,
+    scanStepSec,
+    updateOverlayForTime,
+    videoSrc,
+  ]);
 
   const exportMetricsJson = useCallback(() => {
     if (!frames.length) {
@@ -529,16 +550,128 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
                 </label>
               </div>
 
-              <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3 text-[11px] text-slate-400">
-                <p className="font-medium text-slate-200">Browser pose scan defaults</p>
-                <p>Model: {BROWSER_POSE_SCAN_DEFAULTS.modelVariant}</p>
-                <p>Running mode: {BROWSER_POSE_SCAN_DEFAULTS.runningMode}</p>
-                <p>Sample step: {BROWSER_POSE_SCAN_DEFAULTS.stepSec}s per frame</p>
-                <p>Max process width: {BROWSER_POSE_SCAN_DEFAULTS.maxProcessWidth}px</p>
-                <p>Max poses: {BROWSER_POSE_SCAN_DEFAULTS.numPoses}</p>
-                <p>
-                  Confidence gates: detect {BROWSER_POSE_SCAN_DEFAULTS.minPoseDetectionConfidence}, presence {BROWSER_POSE_SCAN_DEFAULTS.minPosePresenceConfidence}, tracking {BROWSER_POSE_SCAN_DEFAULTS.minTrackingConfidence}
+              <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-slate-200">Browser pose scan (next run)</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanStepSec(BROWSER_POSE_SCAN_DEFAULTS.stepSec);
+                      setScanMaxProcessWidth(BROWSER_POSE_SCAN_DEFAULTS.maxProcessWidth);
+                      setScanPoseOpts(defaultBrowserPoseLandmarkerOptions());
+                    }}
+                    className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Model: {BROWSER_POSE_SCAN_DEFAULTS.modelVariant} · Running mode: {BROWSER_POSE_SCAN_DEFAULTS.runningMode}{' '}
+                  (fixed). Other values below are passed into MediaPipe and frame sampling.
                 </p>
+
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Sample step (seconds between frames): {scanStepSec.toFixed(2)}
+                  <input
+                    type="range"
+                    min={0.04}
+                    max={0.5}
+                    step={0.02}
+                    value={scanStepSec}
+                    onChange={(e) => setScanStepSec(Number(e.target.value))}
+                    disabled={isScanning}
+                    className="w-full accent-amber-500"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Max process width (px): {scanMaxProcessWidth}
+                  <input
+                    type="range"
+                    min={160}
+                    max={960}
+                    step={32}
+                    value={scanMaxProcessWidth}
+                    onChange={(e) => setScanMaxProcessWidth(Number(e.target.value))}
+                    disabled={isScanning}
+                    className="w-full accent-amber-500"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Max poses
+                  <select
+                    value={scanPoseOpts.numPoses}
+                    onChange={(e) =>
+                      setScanPoseOpts((p) => ({ ...p, numPoses: Number(e.target.value) }))
+                    }
+                    disabled={isScanning}
+                    className="rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-white max-w-[120px]"
+                  >
+                    {[1, 2, 3, 4].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Min pose detection confidence: {scanPoseOpts.minPoseDetectionConfidence.toFixed(2)}
+                  <input
+                    type="range"
+                    min={0.05}
+                    max={0.95}
+                    step={0.05}
+                    value={scanPoseOpts.minPoseDetectionConfidence}
+                    onChange={(e) =>
+                      setScanPoseOpts((p) => ({
+                        ...p,
+                        minPoseDetectionConfidence: Number(e.target.value),
+                      }))
+                    }
+                    disabled={isScanning}
+                    className="w-full accent-amber-500"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Min pose presence confidence: {scanPoseOpts.minPosePresenceConfidence.toFixed(2)}
+                  <input
+                    type="range"
+                    min={0.05}
+                    max={0.95}
+                    step={0.05}
+                    value={scanPoseOpts.minPosePresenceConfidence}
+                    onChange={(e) =>
+                      setScanPoseOpts((p) => ({
+                        ...p,
+                        minPosePresenceConfidence: Number(e.target.value),
+                      }))
+                    }
+                    disabled={isScanning}
+                    className="w-full accent-amber-500"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 text-xs text-slate-300">
+                  Min tracking confidence: {scanPoseOpts.minTrackingConfidence.toFixed(2)}
+                  <input
+                    type="range"
+                    min={0.05}
+                    max={0.95}
+                    step={0.05}
+                    value={scanPoseOpts.minTrackingConfidence}
+                    onChange={(e) =>
+                      setScanPoseOpts((p) => ({
+                        ...p,
+                        minTrackingConfidence: Number(e.target.value),
+                      }))
+                    }
+                    disabled={isScanning}
+                    className="w-full accent-amber-500"
+                  />
+                </label>
               </div>
 
               {selectedPreset && (

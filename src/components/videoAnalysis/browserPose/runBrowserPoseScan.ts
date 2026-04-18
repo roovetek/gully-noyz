@@ -17,6 +17,23 @@ export const BROWSER_POSE_SCAN_DEFAULTS = {
   modelVariant: 'pose_landmarker_lite',
 } as const;
 
+/** Options passed to MediaPipe PoseLandmarker.createFromOptions (cached per unique combination). */
+export type BrowserPoseLandmarkerOptions = {
+  numPoses: number;
+  minPoseDetectionConfidence: number;
+  minPosePresenceConfidence: number;
+  minTrackingConfidence: number;
+};
+
+export function defaultBrowserPoseLandmarkerOptions(): BrowserPoseLandmarkerOptions {
+  return {
+    numPoses: BROWSER_POSE_SCAN_DEFAULTS.numPoses,
+    minPoseDetectionConfidence: BROWSER_POSE_SCAN_DEFAULTS.minPoseDetectionConfidence,
+    minPosePresenceConfidence: BROWSER_POSE_SCAN_DEFAULTS.minPosePresenceConfidence,
+    minTrackingConfidence: BROWSER_POSE_SCAN_DEFAULTS.minTrackingConfidence,
+  };
+}
+
 export interface BrowserPoseFrame {
   /** Media time in seconds. */
   timeSec: number;
@@ -33,6 +50,8 @@ export interface RunBrowserPoseScanParams {
   /** Max width for processing; height follows video aspect. */
   maxProcessWidth?: number;
   onProgress?: (fraction: number) => void;
+  /** MediaPipe landmarker options; defaults from BROWSER_POSE_SCAN_DEFAULTS. */
+  poseLandmarker?: Partial<BrowserPoseLandmarkerOptions>;
 }
 
 function seekVideo(video: HTMLVideoElement, timeSec: number): Promise<void> {
@@ -58,14 +77,37 @@ function seekVideo(video: HTMLVideoElement, timeSec: number): Promise<void> {
   });
 }
 
-let landmarkerPromise: Promise<PoseLandmarker> | null = null;
+const landmarkerCache = new Map<string, Promise<PoseLandmarker>>();
+
+function landmarkerCacheKey(opts: BrowserPoseLandmarkerOptions): string {
+  return [
+    opts.numPoses,
+    opts.minPoseDetectionConfidence,
+    opts.minPosePresenceConfidence,
+    opts.minTrackingConfidence,
+  ].join('|');
+}
+
+function mergeLandmarkerOptions(partial?: Partial<BrowserPoseLandmarkerOptions>): BrowserPoseLandmarkerOptions {
+  const d = defaultBrowserPoseLandmarkerOptions();
+  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+  const numPoses = Math.min(4, Math.max(1, Math.round(partial?.numPoses ?? d.numPoses)));
+  return {
+    numPoses,
+    minPoseDetectionConfidence: clamp01(partial?.minPoseDetectionConfidence ?? d.minPoseDetectionConfidence),
+    minPosePresenceConfidence: clamp01(partial?.minPosePresenceConfidence ?? d.minPosePresenceConfidence),
+    minTrackingConfidence: clamp01(partial?.minTrackingConfidence ?? d.minTrackingConfidence),
+  };
+}
 
 /**
  * IMAGE mode: each frame is independent. VIDEO mode keeps graph timestamp state and
  * requires monotonically increasing timestamps for the lifetime of the instance — a
  * second scan (or new clip) that restarts near 0 triggers "Packet timestamp mismatch".
  */
-async function getPoseLandmarker(): Promise<PoseLandmarker> {
+async function getPoseLandmarker(opts: BrowserPoseLandmarkerOptions): Promise<PoseLandmarker> {
+  const key = landmarkerCacheKey(opts);
+  let landmarkerPromise = landmarkerCache.get(key);
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
       const wasm = await FilesetResolver.forVisionTasks(WASM_CDN);
@@ -75,10 +117,10 @@ async function getPoseLandmarker(): Promise<PoseLandmarker> {
           delegate: 'GPU' as const,
         },
         runningMode: 'IMAGE' as const,
-        numPoses: 1,
-        minPoseDetectionConfidence: 0.4,
-        minPosePresenceConfidence: 0.4,
-        minTrackingConfidence: 0.4,
+        numPoses: opts.numPoses,
+        minPoseDetectionConfidence: opts.minPoseDetectionConfidence,
+        minPosePresenceConfidence: opts.minPosePresenceConfidence,
+        minTrackingConfidence: opts.minTrackingConfidence,
       };
       try {
         return await PoseLandmarker.createFromOptions(wasm, options);
@@ -89,6 +131,7 @@ async function getPoseLandmarker(): Promise<PoseLandmarker> {
         });
       }
     })();
+    landmarkerCache.set(key, landmarkerPromise);
   }
   return landmarkerPromise;
 }
@@ -104,7 +147,11 @@ export async function runBrowserPoseScan(params: RunBrowserPoseScanParams): Prom
     stepSec = BROWSER_POSE_SCAN_DEFAULTS.stepSec,
     maxProcessWidth = BROWSER_POSE_SCAN_DEFAULTS.maxProcessWidth,
     onProgress,
+    poseLandmarker: poseLandmarkerPartial,
   } = params;
+  const lmOpts = mergeLandmarkerOptions(poseLandmarkerPartial);
+  const stepSecClamped = Math.min(2, Math.max(0.02, stepSec));
+  const maxProcessWidthClamped = Math.min(1920, Math.max(64, Math.round(maxProcessWidth)));
 
   if (!video.videoWidth || !video.duration || Number.isNaN(video.duration)) {
     throw new Error('Video metadata not loaded');
@@ -116,17 +163,17 @@ export async function runBrowserPoseScan(params: RunBrowserPoseScanParams): Prom
 
   const vw = video.videoWidth;
   const vh = video.videoHeight;
-  const scale = Math.min(1, maxProcessWidth / vw);
+  const scale = Math.min(1, maxProcessWidthClamped / vw);
   canvas.width = Math.max(1, Math.round(vw * scale));
   canvas.height = Math.max(1, Math.round(vh * scale));
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context unavailable');
 
-  const landmarker = await getPoseLandmarker();
+  const landmarker = await getPoseLandmarker(lmOpts);
   const frames: BrowserPoseFrame[] = [];
   const duration = video.duration;
   const times: number[] = [];
-  for (let t = 0; t < duration; t += stepSec) {
+  for (let t = 0; t < duration; t += stepSecClamped) {
     times.push(t);
   }
   if (times.length === 0 || times[times.length - 1] < duration - 1e-3) {
