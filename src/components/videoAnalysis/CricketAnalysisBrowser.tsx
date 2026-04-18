@@ -387,6 +387,81 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
               </div>
             </div>
 
+            <div className="p-4 space-y-3 flex flex-col gap-3">
+              <div
+                className="w-full h-1.5 bg-slate-800 rounded-full cursor-pointer relative group"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = (e.clientX - rect.left) / rect.width;
+                  handleSeek(ratio * duration);
+                }}
+              >
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  disabled={!videoSrc}
+                  className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center disabled:opacity-40"
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMuted(!isMuted)}
+                  disabled={!videoSrc}
+                  className="w-9 h-9 rounded-full bg-slate-800/60 border border-slate-700/40 text-slate-400 flex items-center justify-center disabled:opacity-40"
+                >
+                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+                <span className="text-xs font-mono text-slate-500">
+                  {Math.floor(currentTimestamp / 60)}:{String(Math.floor(currentTimestamp % 60)).padStart(2, '0')} /{' '}
+                  {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs text-slate-200"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={handleVideoUpload}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => void runScan()}
+                  disabled={!videoSrc || isScanning}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/25 border border-amber-500/50 text-amber-200 text-xs font-semibold hover:bg-amber-500/35 disabled:opacity-50"
+                >
+                  <Cpu className="w-3.5 h-3.5" />
+                  Run browser pose scan
+                </button>
+
+                <button
+                  type="button"
+                  onClick={exportMetricsJson}
+                  disabled={!frames.length}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs text-slate-200 disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export JSON
+                </button>
+              </div>
+            </div>
+
             <canvas ref={processCanvasRef} className="hidden" aria-hidden />
 
             <div className="p-4 space-y-3 flex flex-col gap-3">
@@ -472,79 +547,6 @@ export function CricketAnalysisBrowser({ onOpenServerAnalysis }: CricketAnalysis
                   {selectedPreset.summary} — {selectedPreset.disclaimer}
                 </p>
               )}
-
-              <div
-                className="w-full h-1.5 bg-slate-800 rounded-full cursor-pointer relative group"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const ratio = (e.clientX - rect.left) / rect.width;
-                  handleSeek(ratio * duration);
-                }}
-              >
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  disabled={!videoSrc}
-                  className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center disabled:opacity-40"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsMuted(!isMuted)}
-                  disabled={!videoSrc}
-                  className="w-9 h-9 rounded-full bg-slate-800/60 border border-slate-700/40 text-slate-400 flex items-center justify-center disabled:opacity-40"
-                >
-                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                </button>
-                <span className="text-xs font-mono text-slate-500">
-                  {Math.floor(currentTimestamp / 60)}:{String(Math.floor(currentTimestamp % 60)).padStart(2, '0')} /{' '}
-                  {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs text-slate-200"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Upload
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  onChange={handleVideoUpload}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => void runScan()}
-                  disabled={!videoSrc || isScanning}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/25 border border-amber-500/50 text-amber-200 text-xs font-semibold hover:bg-amber-500/35 disabled:opacity-50"
-                >
-                  <Cpu className="w-3.5 h-3.5" />
-                  Run browser pose scan
-                </button>
-
-                <button
-                  type="button"
-                  onClick={exportMetricsJson}
-                  disabled={!frames.length}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 border border-slate-600 text-xs text-slate-200 disabled:opacity-50"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Export JSON
-                </button>
-              </div>
             </div>
           </div>
         </div>
