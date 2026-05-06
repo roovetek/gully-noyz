@@ -1,86 +1,74 @@
 # GullyStream
 
-GullyStream is a mobile-first cricket scoring and match-management application built for informal games such as gully (street) or park cricket. The product is designed to provide frictionless, point-and-shoot match setup, multi-modal scoring & play recording.Supports multi-device access through a lightweight match ID flow.
+GullyStream is a mobile-first cricket scoring and match-management application built for informal games such as gully (street) or park cricket. The goal is to provide a frictionless, point-and-shoot way to set up matches, score play, and record key moments on one phone, while still supporting multi-device access through a lightweight match ID flow.
 
 This repository also includes experimental video-analysis and local AI workflows that extend the core scoring experience into a broader sports-tech platform.
 
 ## Overview
 
-The project combines a production-style frontend with secure match flows, configurable rules, test automation, and deployment diagnostics. It is positioned as a practical sports product rather than a demo-only UI exercise.
+This is a cricket scoring app I am building for real matches with friends, not just as a prototype. It brings match setup, scoring, recording, and a few AI experiments into one place.
 
 Core product goals:
 
 - make informal cricket easy to organize and score
+- build something useful enough for my own games
 - support both public and private match access
 - capture a clean live scoring workflow on mobile screens
-- audio-enabled scoring, recording & sharing game play
-- foundation for AI-assisted analysis for player improvement
+- support audio, video, and simple manual scoring flows
+- build toward AI-assisted analysis for player improvement
 
-## High-Level Features
+## Current Scope
 
-- Match creation and join flows with short shareable match IDs
-- Public and private matches with secret-based access control
-- Audio-enabled ball-by-ball scoring workflow optimized for mobile use
-- Match views for Record, Timeline, Stats, and Config
-- Match browsing for previously created games
-- Rule customization for overs, wickets, bowler limits, and extras behavior
-- Optional video capture tied to match events
-- Hidden QA report route and deployment sync diagnostics for release verification
-- Experimental cricket video analysis modes, including browser-based pose scanning and server-backed analysis hooks
-- Local AI service for audio-to-structured scoring experiments
+- Create, join, and browse matches with short shareable match IDs
+- Support both public and private matches
+- Score each ball using video + voice, voice only, or simple log-only entry
+- Switch between live scoring, timeline, stats, and settings screens
+- Customize rules such as overs, wickets, bowler limits, and extras
+- Record gameplay clips tied to match events
+- Run automated Playwright flows that create matches and capture key app screens
+- Use built-in QA checks across core flows
+- Experiment with local audio scoring and video analysis
 
 ## Tech Stack
 
 ### Frontend
 
-- React 18
-- TypeScript
-- Vite
-- Tailwind CSS
-- Zustand
-- Lucide React
+- React 18 - builds the main user interface
+- TypeScript - adds safer, more maintainable application code
+- Vite - powers fast local development and production builds
+- Tailwind CSS - handles the styling system and responsive layout
+- Zustand - manages lightweight app state
+- Lucide React - provides the interface icons
 
 ### Backend and Data
 
-- Supabase
-- Secure client-side storage wrappers and validation utilities
-- Hash-based app routing for simple static deployment
+- Supabase - stores match data and powers app-side backend access
+- Secure client-side storage wrappers and validation utilities - handle local session data and safer user input
+- Hash-based app routing - keeps navigation simple for static deployment
 
 ### AI and Media Experiments
 
-- MediaPipe Tasks Vision
-- FastAPI local AI service
-- faster-whisper
-- Ollama
+- MediaPipe Tasks Vision - runs browser-side pose and motion analysis
+- FastAPI local AI service - exposes local endpoints for AI-assisted scoring
+- faster-whisper - converts spoken audio into text locally
+- Ollama - runs local language-model inference for scoring experiments
 
 ### Quality and Tooling
 
-- Vitest
-- Testing Library
-- Playwright
-- ESLint
-- Husky + lint-staged
+- Vitest - runs fast unit and component tests
+- Testing Library - tests user-facing React behavior
+- Playwright - automates end-to-end app flows in the browser
+- Custom Playwright QA harness - generates matches and captures walkthrough screenshots automatically
+- ESLint - enforces code quality rules
+- Husky + lint-staged - runs checks before commits
 
-## What Is Done
+## Next
 
-- Built the core landing experience for creating, joining, and browsing matches
-- Implemented public/private match access patterns with secret verification
-- Delivered the primary in-match navigation and scoring surfaces
-- Added configurable match rules instead of hard-coded gameplay defaults
-- Introduced shared validation, security, and storage utilities to reduce duplication
-- Added deployment sync diagnostics and a QA reporting surface for troubleshooting release drift
-- Established a layered test setup covering unit, component, integration, engine, and end-to-end flows
-- Added experimental video-analysis tooling for browser pose scans and server-assisted analysis workflows
-- Added a local AI service for structured scoring experiments from short audio clips
-
-## What Is Left
-
-- Harden the AI analysis features from experimental tooling into a clearer production-ready workflow
-- Expand role and permission handling beyond the current match secret and umpire passcode model
-- Continue polishing mobile UX, empty states, and onboarding for first-time users
-- Add stronger production observability and deployment automation around releases and schema changes
-- Deepen analytics and match insights beyond current score, timeline, and summary views
-- Finalize packaging and rollout strategy for a broader public launch
+- Make the AI features more useful and less rough around the edges
+- Improve who can control what during a match
+- Keep making the mobile flow simpler and easier to use
+- Add better match summaries and insights
+- Get it to a point where my friends and I can rely on it during games
 
 ## Engineering Notes
 
@@ -118,6 +106,6 @@ To run the local AI service:
 npm run ai:service
 ```
 
-## Why This Project Works As A Portfolio Piece
+## Closing Note
 
-GullyStream demonstrates end-to-end product thinking across UX, state management, validation, testing, deployment diagnostics, and emerging AI workflows. It is a strong portfolio project because it shows both shipping discipline on the core product and deliberate exploration of advanced features without hiding what is still in progress.
+GullyStream is being built as a practical cricket product first. The core match flow, rules engine, test coverage, and deployment guardrails are already in place, while the AI and analysis layers are still being pushed forward in parallel.
