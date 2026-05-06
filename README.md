@@ -1,5 +1,7 @@
 # GullyStream
 
+Live site: https://gullystream-match-ap-rauc.bolt.host/
+
 GullyStream is a mobile-first cricket scoring and match-management application built for informal games such as gully (street) or park cricket. The goal is to provide a frictionless, point-and-shoot way to set up matches, score play, and record key moments on one phone, while still supporting multi-device access through a lightweight match ID flow.
 
 This repository also includes experimental video-analysis and local AI workflows that extend the core scoring experience into a broader sports-tech platform.
