@@ -111,3 +111,17 @@ npm run ai:service
 ## Closing Note
 
 GullyStream is being built as a practical cricket product first. The core match flow, rules engine, test coverage, and deployment guardrails are already in place, while the AI and analysis layers are still being pushed forward in parallel.
+
+## Screenshots
+
+![Landing](images/landing.png)
+
+![Create match modal](images/create-match-modal.png)
+
+![Record / scoring](images/record-scoring.png)
+
+![Timeline](images/timeline.png)
+
+![Stats](images/stats.png)
+
+![Match config](images/match-config.png)
